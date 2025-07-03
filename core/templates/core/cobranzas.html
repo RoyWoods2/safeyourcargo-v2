@@ -1,0 +1,182 @@
+{% extends 'core/base.html' %}
+{% load static %}
+{% load format_utils %}
+
+{% block title %}Administración de Cobranzas - Safe Your Cargo{% endblock %}
+
+{% block content %}
+<style>
+  table thead th {
+    background: #f0f2f5;
+    font-size: .75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    line-height: 1rem;
+    color: #6c7a91;
+    padding-top: .5rem;
+    padding-bottom: .5rem;
+    white-space: nowrap; /* 👈 Encabezados en una sola línea */
+    font-family: "Inter Var", Inter, -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  td, th {
+    font-size: 13px;
+  }
+  .encabezado-cobranzas {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #6c7a91;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    margin-bottom: 1rem;
+  }
+  .dataTables_wrapper .dataTables_length,
+  .dataTables_wrapper .dataTables_filter {
+    font-size: 0.875rem;
+    color: #6c7a91;
+  }
+  .dataTables_wrapper .dataTables_length label,
+  .dataTables_wrapper .dataTables_filter label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+  }
+  .dataTables_wrapper .dataTables_filter input {
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 4px 6px;
+    font-size: 0.875rem;
+  }
+</style>
+<div class="text-end mb-3">
+  <a href="{% url 'exportar_cobranzas_excel' %}?cliente={{ filtros.cliente }}&rut={{ filtros.rut }}&certificado={{ filtros.certificado }}&inicio={{ filtros.inicio }}&fin={{ filtros.fin }}"
+     class="btn btn-success btn-sm">
+    <i class="bi bi-file-earmark-excel"></i> Descargar Excel
+  </a>
+</div>
+
+
+<!-- FILTROS -->
+<form method="GET" class="row mb-4 gx-3 bg-light p-3 rounded shadow-sm">
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Fecha Inicio:</label>
+    <input type="date" name="inicio" class="form-control" value="{{ filtros.inicio }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Fecha Fin:</label>
+    <input type="date" name="fin" class="form-control" value="{{ filtros.fin }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Cliente:</label>
+    <input type="text" name="cliente" class="form-control" placeholder="Nombre cliente..." value="{{ filtros.cliente }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">RUT:</label>
+    <input type="text" name="rut" class="form-control" placeholder="Ej: 12345678-9" value="{{ filtros.rut }}">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label fw-semibold">Certificado:</label>
+    <input type="text" name="certificado" class="form-control" placeholder="Ej: 45" value="{{ filtros.certificado }}">
+  </div>
+  <div class="col-md-2 d-flex align-items-end">
+    <div class="d-grid w-100">
+      <button type="submit" class="btn btn-outline-primary">
+        <i class="bi bi-search"></i> Filtrar
+      </button>
+    </div>
+  </div>
+</form>
+{% if filtros.cliente or filtros.rut or filtros.certificado or filtros.inicio or filtros.fin %}
+  <div class="text-end mb-3">
+    <a href="{% url 'vista_cobranzas' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-x-circle"></i> Limpiar filtros
+    </a>
+  </div>
+{% endif %}
+
+
+    <table id="cobranzaTable" class="table table-hover table-bordered align-middle text-nowrap">
+
+    <thead>
+  <tr class="text-center align-middle">
+    <th>Número Certificado</th>
+    <th>Número Factura</th>
+    <th>Cliente</th>
+    <th>RUT</th>
+    <th>Valor Seguro (USD)</th>
+    <th>Valor Prima (USD)</th>
+    <th>Valor Factura (CLP)</th>
+    <th>Referencia</th>
+  </tr>
+</thead>
+<tbody>
+  {% for cobro in cobranzas %}
+  <tr class="text-center align-middle">
+    <td>C-{{ cobro.certificado.id }}</td>
+    <td>
+      {% if cobro.certificado.factura %}
+        {{ cobro.certificado.factura.numero }}
+      {% else %}
+        <span class="text-muted">-</span>
+      {% endif %}
+    </td>
+    <td>{{ cobro.certificado.cliente.nombre }}</td>
+    <td>{{ cobro.certificado.cliente.rut}}</td>
+    <td>${{ cobro.monto_asegurado }}</td>
+    <td>${{ cobro.valor_prima_cobro }}</td>
+    <td>
+      {% if cobro.certificado.factura %}
+        ${{ cobro.certificado.factura.valor_clp|floatformat:0 }}
+      {% else %}
+        <span class="text-muted">-</span>
+      {% endif %}
+    </td>
+    <td>{{ cobro.certificado.notas.referencia|default:"-" }}</td>
+  </tr>
+  {% empty %}
+  <tr>
+    <td colspan="8" class="text-center text-muted">No hay cobranzas registradas aún.</td>
+  </tr>
+  {% endfor %}
+</tbody>
+
+  </table>
+</div>
+{% endblock %}
+
+{% block extrajs %}
+
+
+<!-- DataTables después de jQuery -->
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+
+<!-- Script personalizado al final -->
+<script>
+  $(document).ready(function () {
+    const table = $('#cobranzaTable').DataTable({
+      order: [[1, 'desc']],
+      language: {
+        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-CL.json'
+      }
+    });
+
+    // Filtros personalizados
+    $('#filtro-cliente').on('keyup change', function () {
+      table.column(2).search(this.value).draw();
+    });
+
+    $('#filtro-rut').on('keyup change', function () {
+      table.column(3).search(this.value).draw();
+    });
+
+    $('#filtro-certificado').on('keyup change', function () {
+      table.column(0).search(this.value).draw();
+    });
+
+    $('#filtro-referencia').on('keyup change', function () {
+      table.column(7).search(this.value).draw();
+    });
+  });
+</script>
+
+
+{% endblock %}

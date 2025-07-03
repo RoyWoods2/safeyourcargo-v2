@@ -1,0 +1,572 @@
+{% load static %}
+<div class="modal fade" id="modal-certificado" tabindex="-1" aria-labelledby="modalCertificadoLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl">
+    <div class="modal-content shadow">
+
+      <style>
+        .modal-content {
+          font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, sans-serif;
+          font-size: 14px;
+        }
+
+        .section-container {
+          background: #fff;
+          border-radius: 8px;
+          border: 1px solid #ddd;
+          padding: 1.25rem;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+          position: relative;
+        }
+
+        .section-container .badge {
+          position: absolute;
+          top: -0.75rem;
+          left: 1rem;
+          padding: 0.35em 0.75em;
+          font-size: 0.75rem;
+          font-weight: 600;
+          background-color: #0a8754;
+        }
+
+        label {
+          font-weight: 600;
+          font-size: 13px;
+        }
+
+        .form-control, .form-select {
+          font-size: 14px;
+          padding: 6px 12px;
+        }
+      </style>
+
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalCertificadoLabel">Crear Nuevo Certificado</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+
+      <div class="modal-body">
+        <form id="form-certificado" method="post">
+          {% csrf_token %}
+
+          <!-- INFO GENERAL -->
+          <div class="section-container">
+            <span class="badge text-white">INFORMACIÓN GENERAL</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label class="form-label">Póliza</label>
+                <input type="text" class="form-control bg-light" value="01930324AA" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Compañía</label>
+                <input type="text" class="form-control bg-light" value="SafeYourCargo" readonly>
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-6">
+  <label class="form-label">Cliente</label>
+  {{ cert_form.cliente }}
+</div>
+
+
+              <div class="col-md-3">
+                <label class="form-label">Fecha Partida</label>
+                {{ cert_form.fecha_partida }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Fecha Llegada</label>
+                {{ cert_form.fecha_llegada }}
+              </div>
+            </div>
+          </div>
+
+          <!-- RUTA -->
+          <div class="section-container">
+            <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
+            <div class="row mb-3 mt-3">
+<div class="col-md-6">
+  <label class="form-label">País de origen del producto</label>
+  <select id="paisOrigen" name="pais_origen" class="form-select">
+    <option value="">Seleccione un país</option>
+  </select>
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">Ciudad de origen del producto</label>
+  <select id="ciudadOrigen" name="ciudad_origen" class="form-select">
+    <option value="">Seleccione una ciudad</option>
+  </select>
+</div>
+
+              <div class="col-md-6">
+  <label class="form-label">País Destino</label>
+  <select id="paisDestino" name="pais_destino" class="form-select">
+    <option value="">Seleccione un país</option>
+  </select>
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">Ciudad Destino</label>
+  <select id="ciudadDestino" name="ciudad_destino" class="form-select">
+    <option value="">Seleccione una ciudad</option>
+  </select>
+</div>
+
+            </div>
+          </div>
+<!-- EMBARQUE -->
+<div class="section-container">
+  <span class="badge text-white">EMBARQUE</span>
+  <div class="row mb-3 mt-3">
+    <div class="col-md-6">
+      <label class="form-label">Modo de Transporte</label>
+      <select class="form-select" id="modoTransporte" name="modo_transporte">
+        <option value="">Seleccione</option>
+        <option value="Aereo">Aéreo</option>
+        <option value="Maritimo">Marítimo</option>
+        <option value="TerrestreFerroviario">Terrestre / Ferroviario</option>
+      </select>
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Tipo de Carga</label>
+      {{ metodo_form.tipo_carga }}
+    </div>
+    <div class="col-md-6">
+      <label class="form-label">Cláusula</label>
+      {{ metodo_form.clausula }}
+    </div>
+
+    <!-- AÉREO -->
+    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_aereo">
+      <label class="form-label">Tipo de Embalaje (Aéreo)</label>
+      <select class="form-select" id="tipoEmbalajeAereo" name="tipo_embalaje_aereo">
+        <option value="">Seleccione una opción</option>
+        <option value="Cajas de Carton">Cajas de Carton</option>
+        <option value="Cajas de madera">Cajas de madera</option>
+        <option value="Cajas de plástico">Cajas de plástico</option>
+        <option value="Pallets">Pallets</option>
+        <option value="OTRO">OTRO (especificar)</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_aereo">
+      <label class="form-label">Especificar otro tipo de embalaje (Aéreo)</label>
+      <input type="text" class="form-control" id="otroEmbalajeAereo" name="otro_embalaje_aereo">
+    </div>
+
+    <!-- MARÍTIMO -->
+    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_maritimo">
+      <label class="form-label">Tipo de Embalaje Marítimo</label>
+      <select class="form-select" id="embalajeMaritimo" name="embalaje_maritimo">
+        <option value="">Seleccione</option>
+        <option value="FCL">FCL (Contenedor Completo)</option>
+        <option value="LCL">LCL (Carga Suelta)</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 mt-2 d-none" id="grupo_tipo_container_maritimo">
+      <label class="form-label">Tipo de Contenedor (FCL)</label>
+      <select class="form-select" id="tipoContainerMaritimo" name="tipo_container_maritimo">
+        <option value="">Seleccione</option>
+        <option value="DRY">DRY</option>
+        <option value="REEFER">REEFER</option>
+        <option value="HIGH CUBE">HIGH CUBE</option>
+        <option value="OPEN TOP">OPEN TOP</option>
+        <option value="FLAT RACK">FLAT RACK</option>
+        <option value="FLEX TANK">FLEX TANK</option>
+        <option value="ISO TANK">ISO TANK</option>
+        <option value="FLEXI TANK">FLEXI TANK</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 mt-2 d-none" id="grupo_tipo_embalaje_maritimo_lcl">
+      <label class="form-label">Tipo de Embalaje (LCL)</label>
+      <select class="form-select" id="tipoEmbalajeLCL" name="tipo_embalaje_lcl">
+        <option value="">Seleccione</option>
+        <option value="Cajas de Carton">Cajas de Carton</option>
+        <option value="Cajas de Madera">Cajas de Madera</option>
+        <option value="Cajas de Plasticos">Cajas de Plástico</option>
+        <option value="Pallets">Pallets</option>
+        <option value="OTRO">OTRO (especificar)</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_lcl">
+      <label class="form-label">Especificar otro tipo de embalaje (LCL)</label>
+      <input type="text" class="form-control" id="otroEmbalajeLCL" name="otro_embalaje_lcl">
+    </div>
+
+    <!-- TERRESTRE -->
+    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_terrestre">
+      <label class="form-label">Tipo de Embalaje (Terrestre)</label>
+      <select class="form-select" id="tipoEmbalajeTerrestre" name="tipo_embalaje_terrestre">
+        <option value="">Seleccione una opción</option>
+        <option value="Cajas de Carton">Cajas de Carton</option>
+        <option value="Cajas de Madera">Cajas de Madera</option>
+        <option value="Cajas de Plástico">Cajas de Plástico</option>
+        <option value="Pallets">Pallets</option>
+        <option value="OTRO">OTRO (especificar)</option>
+      </select>
+    </div>
+
+    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_terrestre">
+      <label class="form-label">Especificar otro tipo de embalaje (Terrestre)</label>
+      <input type="text" class="form-control" id="otroEmbalajeTerrestre" name="otro_embalaje_terrestre">
+    </div>
+  </div>
+</div>
+
+<!-- VALORES Y PRIMA -->
+<div class="section-container">
+  <span class="badge text-white">💰 VALORES Y PRIMA</span>
+  <div class="row mb-3 mt-3">
+    
+    <!-- Tipo de Mercancía -->
+    <div class="col-md-6">
+      <label class="form-label">Tipo de Mercancía</label>
+      {{ mercancia_form.tipo }}
+    </div>
+
+    <!-- Valor FCA -->
+    <div class="col-md-3">
+      <label class="form-label">Valor FCA (USD)</label>
+      {{ mercancia_form.valor_fca }}
+    </div>
+
+    <!-- Valor Flete -->
+    <div class="col-md-3">
+      <label class="form-label">Valor Flete (USD)</label>
+      {{ mercancia_form.valor_flete }}
+    </div>
+
+    <!-- Monto Asegurado (visible) -->
+    <div class="col-md-3 mt-3">
+      <label class="form-label">Monto Asegurado</label>
+      <input type="text" class="form-control" id="montoAsegurado" readonly>
+      <input type="hidden" name="monto_asegurado" id="montoAseguradoHidden">
+    </div>
+
+    <!-- Cambiar prima manualmente -->
+    <div class="col-md-12 mt-3">
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" id="togglePrima">
+        <label class="form-check-label" for="togglePrima">Cambiar prima manualmente</label>
+      </div>
+    </div>
+
+    <!-- Valor Prima (formateado visible) -->
+<!-- Valor Prima (mostrado formateado) -->
+<div class="col-md-3 mt-2">
+  <label class="form-label">Valor Prima (USD)</label>
+  <input type="text" id="valorPrimaFormateado" class="form-control" readonly>
+  <input type="hidden" id="id_valor_prima" name="valor_prima">
+</div>
+
+
+  </div>
+
+          </div>
+
+          <!-- DETALLE DE VIAJE -->
+          <div class="section-container">
+            <span class="badge text-white">DETALLES DEL VIAJE</span>
+            <div class="row mb-3 mt-3">
+<div class="col-md-6">
+  <label class="form-label" id="label_nombre_transporte">Nombre Avión / Línea Aérea</label>
+  {{ viaje_form.nombre_avion }}
+</div>
+
+<div class="col-md-6">
+  <label class="form-label" id="label_numero_viaje">N° Viaje / Vuelo</label>
+  {{ viaje_form.numero_viaje }}
+</div>
+<div class="col-md-6">
+  <label class="form-label">País de inicio del viaje</label>
+  <select id="vueloOrigenPais" name="vuelo_origen_pais" class="form-select">
+    <option value="">Seleccione un país</option>
+  </select>
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">Ciudad de inicio del viaje</label>
+  <select id="vueloOrigenCiudad" name="vuelo_origen_ciudad" class="form-select">
+    <option value="">Seleccione una ciudad</option>
+  </select>
+</div>
+
+<div class="col-md-6">
+  <label class="form-label">País de destino del viaje</label>
+  <select id="vueloDestinoPais" name="vuelo_destino_pais" class="form-select">
+    <option value="">Seleccione un país</option>
+  </select>
+</div>
+
+<div class="col-md-6">
+  <label class="form-label"> Ciudad de destino del viaje</label>
+  <select id="vueloDestinoCiudad" name="vuelo_destino_ciudad" class="form-select">
+    <option value="">Seleccione una ciudad</option>
+  </select>
+</div>
+
+
+              
+<div class="col-md-6" id="grupo_aeropuerto_origen">
+  <label class="form-label" id="label_aeropuerto_origen">Aeropuerto Origen</label>
+  {{ viaje_form.aeropuerto_origen }}
+</div>
+
+<div class="col-md-6" id="grupo_aeropuerto_destino">
+  <label class="form-label" id="label_aeropuerto_destino">Aeropuerto Destino</label>
+  {{ viaje_form.aeropuerto_destino }}
+</div>
+
+              <div class="col-12 mt-2"><label class="form-label">Descripción</label>{{ viaje_form.descripcion_carga }}</div>
+            </div>
+          </div>
+
+          <!-- NOTAS -->
+          <div class="section-container">
+            <span class="badge text-white">NOTAS Y NÚMEROS</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-4"><label class="form-label">Referencia</label>{{ notas_form.referencia }}</div>
+              <div class="col-md-4"><label class="form-label">Guía de Carga</label>{{ notas_form.guia_carga }}</div>
+              <div class="col-md-4"><label class="form-label">N° Factura</label>{{ notas_form.numero_factura }}</div>
+              <div class="col-12 mt-2"><label class="form-label">Notas</label>{{ notas_form.notas }}</div>
+            </div>
+          </div>
+        </form>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="submit" class="btn btn-primary" form="form-certificado">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="spinner-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.85); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
+  <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+    <span class="visually-hidden">Cargando...</span>
+  </div>
+  <p class="mt-3 text-primary fw-bold">Generando certificado y factura electrónica...</p>
+</div>
+
+<script>
+// --- FUNCIONES (Se definen una vez) ---
+
+// Función principal para calcular el monto asegurado y la prima automática
+function calcularMontoAsegurado() {
+  const fca = parseFloat(document.getElementById("id_valor_fca").value.replace(',', '.')) || 0;
+  const flete = parseFloat(document.getElementById("id_valor_flete").value.replace(',', '.')) || 0;
+  const asegurado = (fca + flete) * 1.10;
+
+  document.getElementById("montoAsegurado").value = asegurado.toFixed(2);
+  document.getElementById("montoAseguradoHidden").value = asegurado.toFixed(2);
+
+  // Obtenemos las referencias a los inputs que usaremos
+  const togglePrima = document.getElementById("togglePrima");
+  const primaHiddenInput = document.getElementById("id_valor_prima");
+  const primaVisualInput = document.getElementById("valorPrimaFormateado");
+
+  const clienteSelect = document.getElementById("id_cliente");
+  const tipoCargaSelect = document.getElementById("id_tipo_carga");
+
+  // Solo calcula y establece la prima si el "togglePrima" NO está marcado (modo automático)
+  if (!togglePrima.checked && clienteSelect && tipoCargaSelect) {
+    const selected = clienteSelect.options[clienteSelect.selectedIndex];
+    const tipoCarga = tipoCargaSelect.value;
+
+    let tasa = 0.15;
+    let minimo = 20.0;
+
+    if (tipoCarga === 'PolizaCongelada') {
+      tasa = parseFloat(selected.dataset.tasaCongelada);
+      minimo = parseFloat(selected.dataset.minimoCongelado);
+    } else {
+      tasa = parseFloat(selected.dataset.tasa);
+      minimo = parseFloat(selected.dataset.minimo);
+    }
+
+    const primaCalculada = Math.max(asegurado * (tasa / 100), minimo);
+
+    // Guarda el valor crudo en el input oculto
+    primaHiddenInput.value = primaCalculada.toFixed(2);
+
+    // Muestra el valor formateado en el input visible
+    primaVisualInput.value = new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(primaCalculada);
+
+    // Asegúrate de que el input visible sea de solo lectura en modo automático
+    primaVisualInput.readOnly = true;
+  }
+}
+
+// Función para manejar la entrada manual en el campo visible
+// Se define una sola vez y se usa como referencia en addEventListener/removeEventListener
+const handleManualPrimaInput = function() {
+  const primaHiddenInput = document.getElementById("id_valor_prima"); // Se obtiene aquí, o si se hace global, se usa la ref global
+  // Limpia cualquier caracter no numérico, y asegura que el decimal sea un punto
+  let rawValue = this.value.replace(/[^0-9.,]/g, '');
+  rawValue = rawValue.replace(',', '.'); // Reemplaza comas por puntos para parseFloat
+
+  // Convierte a número y formatea a 2 decimales para guardar en el hidden input
+  primaHiddenInput.value = parseFloat(rawValue || '0').toFixed(2);
+};
+
+
+// --- INICIALIZACIÓN (Se ejecuta cuando el DOM está completamente cargado) ---
+document.addEventListener('DOMContentLoaded', () => {
+  // Obtenemos las referencias a los inputs que usaremos, ¡solo una vez!
+  const togglePrima = document.getElementById("togglePrima");
+  const primaHiddenInput = document.getElementById("id_valor_prima");
+  const primaVisualInput = document.getElementById("valorPrimaFormateado");
+
+  // 1. Establecer el estado inicial del campo visual de la prima al cargar la página
+  // Si el toggle no está marcado inicialmente, el campo visual es de solo lectura.
+  // Si el toggle SÍ está marcado, el campo visual es editable.
+  if (togglePrima) { // Asegura que el toggle existe
+      primaVisualInput.readOnly = !togglePrima.checked;
+      // Si el toggle está marcado al cargar, prepara el campo para la edición manual
+      if (togglePrima.checked) {
+          primaVisualInput.value = parseFloat(primaHiddenInput.value || '0').toFixed(2);
+          primaVisualInput.addEventListener('input', handleManualPrimaInput);
+      }
+  }
+  
+  // 2. Realizar el cálculo inicial de la prima automática
+  // Esto llenará el campo si el toggle no está marcado
+  calcularMontoAsegurado();
+
+
+  // 3. Configurar listeners para la actualización automática de la prima
+  const camposParaCalculo = [
+    "id_valor_fca",
+    "id_valor_flete",
+    "id_cliente",
+    "id_tipo_carga"
+  ];
+
+  camposParaCalculo.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', calcularMontoAsegurado);
+      el.addEventListener('change', calcularMontoAsegurado);
+    }
+  });
+
+  // 4. Configurar listener para el toggle de "Cambiar prima manualmente"
+  if (togglePrima) { // Asegura que el toggle exista
+    togglePrima.addEventListener('change', function () {
+      // 'this' se refiere al checkbox togglePrima
+      primaVisualInput.readOnly = !this.checked; // Controla el estado de solo lectura del campo visible
+
+      if (this.checked) { // Si el toggle está MARCADO (modo manual)
+        // Muestra el valor actual del input oculto (sin formato de moneda) para que el usuario pueda editarlo
+        primaVisualInput.value = parseFloat(primaHiddenInput.value || '0').toFixed(2);
+        primaVisualInput.focus(); // Pone el foco en el campo para que el usuario pueda escribir
+        
+        // Agrega el listener para capturar la entrada manual y actualizar el campo oculto
+        primaVisualInput.addEventListener('input', handleManualPrimaInput);
+
+      } else { // Si el toggle NO está marcado (modo automático)
+        // Remueve el listener de entrada manual para evitar conflictos
+        primaVisualInput.removeEventListener('input', handleManualPrimaInput);
+        // Vuelve a calcular y mostrar la prima automáticamente
+        calcularMontoAsegurado();
+      }
+    });
+  }
+});
+</script>
+
+
+
+
+<script>
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    for (let cookie of document.cookie.split(';')) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+  const form = document.getElementById("form-certificado");
+  const spinner = document.getElementById("spinner-overlay");
+
+  if (!form || !spinner) return;
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    spinner.style.display = "flex";
+
+    const formData = new FormData(form);
+
+    fetch("{% url 'crear_certificado' %}", {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": getCookie("csrftoken"),
+        "X-Requested-With": "XMLHttpRequest"
+      },
+      body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+      spinner.style.display = "none";
+
+      if (data.success) {
+        Swal.fire({
+          icon: "success",
+          title: "Certificado creado",
+          text: "Factura emitida correctamente.",
+          confirmButtonText: "Ver listado"
+        }).then(() => location.reload());
+      } else if (data.errors) {
+        let mensaje = "";
+        for (const [formulario, errores] of Object.entries(data.errors)) {
+          for (const [campo, lista] of Object.entries(errores)) {
+            mensaje += `- ${campo}: ${lista.join(", ")}\n`;
+          }
+        }
+        Swal.fire({
+          icon: "error",
+          title: "Errores en el formulario",
+          text: mensaje
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "Error desconocido",
+          text: "No se pudo generar el certificado."
+        });
+      }
+    })
+    .catch(error => {
+      spinner.style.display = "none";
+      Swal.fire({
+        icon: "error",
+        title: "Error de red",
+        text: error.message || "No se pudo conectar al servidor."
+      });
+    });
+  });
+});
+</script>
+
+
+
+
+
+<script src="{% static 'js/formulario_viaje.js' %}"></script>

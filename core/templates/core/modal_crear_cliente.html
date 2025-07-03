@@ -1,0 +1,257 @@
+{% load static %}
+<div class="modal fade" id="modal-cliente" tabindex="-1" aria-labelledby="modalClienteLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+
+      <style>
+        body, .modal-content {
+          font-family: 'Inter', 'Segoe UI', Roboto, Helvetica, sans-serif;
+          font-size: 14px;
+        }
+
+        .section-container {
+          background: #fff;
+          border-radius: 8px;
+          border: 1px solid #ddd;
+          padding: 1.25rem;
+          margin-bottom: 1.5rem;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+          position: relative;
+        }
+
+        .section-container .badge {
+          position: absolute;
+          top: -0.75rem;
+          left: 1rem;
+          padding: 0.35em 0.75em;
+          font-size: 0.75rem;
+          font-weight: 600;
+          background-color: #0a8754;
+        }
+
+        label {
+          font-weight: 600;
+          font-size: 13px;
+        }
+
+        .form-control, .form-select {
+          font-size: 14px;
+          padding: 6px 12px;
+        }
+      </style>
+
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalClienteLabel">Crear Nuevo Cliente</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="form-cliente" method="post">
+          {% csrf_token %}
+          <input type="hidden" id="cliente_id" name="cliente_id" value="">
+
+          <!-- DATOS CLIENTE -->
+          <div class="section-container">
+            <span class="badge text-white">DATOS CLIENTE</span>
+            <div class="row mb-3 mt-3">
+              <div class="col">
+                <label class="form-label">Tipo Cliente</label>
+                <div class="btn-group w-100" role="group">
+                  <input type="radio" class="btn-check" name="tipo_cliente" id="tipo_empresa" value="empresa" checked>
+                  <label class="btn btn-outline-primary" for="tipo_empresa">Empresa</label>
+                  <input type="radio" class="btn-check" name="tipo_cliente" id="tipo_persona" value="persona">
+                  <label class="btn btn-outline-primary" for="tipo_persona">Persona</label>
+                </div>
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label for="nombre" class="form-label">Nombre</label>
+                <input type="text" class="form-control" id="nombre" name="nombre" required>
+              </div>
+              <div class="col-md-6">
+                <label for="rut" class="form-label">RUT</label>
+                <input type="text" class="form-control" id="rut" name="rut" placeholder="Ingrese el RUT" maxlength="12" />
+
+              </div>
+            </div>
+            <div class="row mb-3">
+          
+            <div class="row mb-3">
+              <div class="col-12">
+                <label for="direccion" class="form-label">Dirección</label>
+                <textarea class="form-control" id="direccion" name="direccion" rows="2" required></textarea>
+              </div>
+            </div>
+            <div class="row mb-3">
+             <div class="col-md-4">
+                            <label for="pais" class="form-label">País</label>
+                            <select id="pais" name="pais" class="form-select" required>
+                                <option value="Chile" selected>Chile</option>
+                            </select>
+                        </div>
+              <div class="col-md-4">
+                <label for="ciudad" class="form-label">Ciudad</label>
+                <select id="ciudad" name="ciudad" class="form-select" required>
+                  <option value="">Seleccionar ciudad</option>
+                </select>
+              </div>
+              <div class="col-md-4">
+                            <label for="region" class="form-label">Región</label>
+                            <select id="region" name="region" class="form-select" required>
+                                <option value="">Seleccionar región</option>
+                                <!-- 16 regiones de Chile -->
+                                <option value="Arica y Parinacota">Arica y Parinacota</option>
+                                <option value="Tarapacá">Tarapacá</option>
+                                <option value="Antofagasta">Antofagasta</option>
+                                <option value="Atacama">Atacama</option>
+                                <option value="Coquimbo">Coquimbo</option>
+                                <option value="Valparaíso">Valparaíso</option>
+                                <option value="Metropolitana de Santiago">Metropolitana de Santiago</option>
+                                <option value="Libertador General Bernardo O'Higgins">Libertador General Bernardo O'Higgins</option>
+                                <option value="Maule">Maule</option>
+                                <option value="Ñuble">Ñuble</option>
+                                <option value="Biobío">Biobío</option>
+                                <option value="La Araucanía">La Araucanía</option>
+                                <option value="Los Ríos">Los Ríos</option>
+                                <option value="Los Lagos">Los Lagos</option>
+                                <option value="Aysén del General Carlos Ibáñez del Campo">Aysén del General Carlos Ibáñez del Campo</option>
+                                <option value="Magallanes y de la Antártica Chilena">Magallanes y de la Antártica Chilena</option>
+                            </select>
+                        </div>
+              
+            </div>
+          </div>
+
+          <!-- CARGA SECA -->
+          <div class="section-container">
+            <span class="badge text-white">CARGA SECA</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label for="tasa" class="form-label">Tasa Carga Seca</label>
+                <input type="number" class="form-control" id="tasa" name="tasa" step="0.001" required>
+              </div>
+              <div class="col-md-6">
+                <label for="valor_minimo" class="form-label">Valor Mínimo</label>
+                <input type="text" class="form-control" id="valor_minimo" name="valor_minimo" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- CARGA CONGELADA -->
+          <div class="section-container">
+            <span class="badge text-white">CARGA CONGELADA</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label for="tasa_congelada" class="form-label">Tasa Carga Congelada</label>
+                <input type="number" class="form-control" id="tasa_congelada" name="tasa_congelada" step="0.001" required>
+              </div>
+              <div class="col-md-6">
+                <label for="valor_minimo_congelado" class="form-label">Valor Mínimo Congelado</label>
+                <input type="text" class="form-control" id="valor_minimo_congelado" name="valor_minimo_congelado" required>
+              </div>
+            </div>
+          </div>
+
+          <!-- TRAMO COBRO -->
+          <div class="section-container">
+            <span class="badge text-white">TRAMO COBRO</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label for="tramo_cobro" class="form-label">Tramo de Cobro (días)</label>
+                <input type="number" class="form-control" id="tramo_cobro" name="tramo_cobro" required>
+              </div>
+              
+            </div>
+          </div>
+
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+        <button type="submit" class="btn btn-primary" form="form-cliente">Guardar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
+}
+</script>
+
+<script>
+  document.getElementById('rut').addEventListener('input', function(e) {
+    // Eliminar cualquier carácter que no sea número o K/k
+    let rut = e.target.value.replace(/[^0-9kK]/g, '').toUpperCase();
+
+    // Separar el dígito verificador
+    let cuerpo = rut.slice(0, -1);
+    let dv = rut.slice(-1);
+
+    // Formatear el cuerpo con puntos como miles
+    let cuerpoFormateado = '';
+    let cont = 0;
+
+    for (let i = cuerpo.length - 1; i >= 0; i--) {
+      cuerpoFormateado = cuerpo[i] + cuerpoFormateado;
+      cont++;
+      if (cont % 3 === 0 && i !== 0) {
+        cuerpoFormateado = '.' + cuerpoFormateado;
+      }
+    }
+
+    // Combinar el cuerpo con el dígito verificador (si existe)
+    if (rut.length > 1) {
+      e.target.value = `${cuerpoFormateado}-${dv}`;
+    } else {
+      e.target.value = rut;
+    }
+  });
+</script>
+
+
+<script>
+function formatearMiles(valor) {
+  return valor.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+function limpiarValor(valor) {
+  return valor.replace(/\./g, "").replace(/,/g, "").trim();
+}
+
+['valor_minimo', 'valor_minimo_congelado'].forEach(function (campoId) {
+  const input = document.getElementById(campoId);
+
+  if (!input) return;
+
+  // Al escribir, quitar puntos y mostrar el valor limpio en el backend
+  input.addEventListener("input", function () {
+    let limpio = limpiarValor(this.value);
+    if (!/^\d+$/.test(limpio)) return;
+
+    this.dataset.raw = limpio;
+    this.value = formatearMiles(limpio);
+  });
+
+  // Al enviar el formulario, sobreescribir value con valor limpio
+  document.getElementById("form-cliente").addEventListener("submit", function () {
+    if (input.dataset.raw) {
+      input.value = input.dataset.raw;
+    } else {
+      input.value = limpiarValor(input.value);
+    }
+  });
+});
+</script>
