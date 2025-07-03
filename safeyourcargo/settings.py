@@ -17,6 +17,7 @@ ALLOWED_HOSTS = ['seguros.safeyourcargo.com','localhost', '127.0.0.1', '64.227.2
 
 # Aplicaciones instaladas
 INSTALLED_APPS = [
+    
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -24,7 +25,7 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'django.contrib.humanize',
-    # Agrega aquí tus apps personalizadas
+    # Agrega aquí tus apps personalizadas    
     'core',
 ]
 CSRF_TRUSTED_ORIGINS = ['https://seguros.safeyourcargo.com']
@@ -120,3 +121,13 @@ AUTH_USER_MODEL = 'core.Usuario'
 
 BCCH_USER = os.getenv("BCCH_USER")
 BCCH_PASS = os.getenv("BCCH_PASS")
+
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.sendgrid.net'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'apikey' # SendGrid usa "apikey" como usuario SMTP
+EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY') # Aquí tu API Key como contraseña
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@safeyourcargo.com')
+SERVER_EMAIL = DEFAULT_FROM_EMAIL
