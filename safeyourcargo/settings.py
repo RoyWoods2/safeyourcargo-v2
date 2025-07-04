@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     'django.contrib.humanize',
     # Agrega aquí tus apps personalizadas    
     'core',
+    'anymail',
 ]
 CSRF_TRUSTED_ORIGINS = ['https://seguros.safeyourcargo.com']
 # Middleware
@@ -95,12 +96,12 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 # Zona horaria y lenguaje
-LANGUAGE_CODE = 'es-cl'
+LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'America/Santiago'
 USE_I18N = True
 USE_L10N = True
 USE_TZ = True
-
+USE_THOUSAND_SEPARATOR = True
 # Archivos estáticos
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [
@@ -123,11 +124,15 @@ BCCH_USER = os.getenv("BCCH_USER")
 BCCH_PASS = os.getenv("BCCH_PASS")
 
 
-EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = 'smtp.sendgrid.net'
-EMAIL_PORT = 587
-EMAIL_USE_TLS = True
-EMAIL_HOST_USER = 'apikey' # SendGrid usa "apikey" como usuario SMTP
-EMAIL_HOST_PASSWORD = os.environ.get('SENDGRID_API_KEY') # Aquí tu API Key como contraseña
+# Backend de correo electrónico usando Anymail para Mailgun
+EMAIL_BACKEND = "anymail.backends.mailgun.EmailBackend"
+
+# Configuración específica de Anymail para Mailgun
+ANYMAIL = {
+    "MAILGUN_API_KEY": os.environ.get('MAILGUN_API_KEY'),
+    "MAILGUN_SENDER_DOMAIN": os.environ.get('MAILGUN_DOMAIN'), # Tu dominio de Mailgun, ej. 'mg.safeyourcargo.com'
+}
+
+# Configuración del remitente por defecto para todos los correos de Django
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@safeyourcargo.com')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL

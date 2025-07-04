@@ -40,11 +40,11 @@ class Cliente(models.Model):
     ciudad = models.CharField(max_length=100)
     region = models.CharField(max_length=100)
 
-    tasa = models.DecimalField(max_digits=10, decimal_places=3)
+    tasa = models.DecimalField(max_digits=10, decimal_places=4)
     valor_minimo = models.DecimalField(max_digits=10, decimal_places=2)
 
-    tasa_congelada = models.DecimalField(max_digits=10, decimal_places=3)
-    valor_minimo_congelado = models.DecimalField(max_digits=10, decimal_places=2)
+    tasa_congelada = models.DecimalField(max_digits=10, decimal_places=2)
+    valor_minimo_congelado = models.DecimalField(max_digits=10, decimal_places=4)
 
     tramo_cobro = models.PositiveIntegerField()
     creado_por = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='clientes_creados')
@@ -71,20 +71,24 @@ class CertificadoTransporte(models.Model):
     poliza = models.CharField(default="01930324AA", max_length=20)
     compania = models.CharField(default="SafeYourCargo", max_length=50)
 
-    cliente = models.ForeignKey(Cliente, on_delete=models.CASCADE)
+    cliente = models.ForeignKey('Cliente', on_delete=models.CASCADE) # Asumiendo que Cliente está definido
     fecha_partida = models.DateField()
     fecha_llegada = models.DateField()
 
     # Relación uno a uno con otros modelos
-    ruta = models.OneToOneField('Ruta', on_delete=models.CASCADE)
-    metodo_embarque = models.OneToOneField('MetodoEmbarque', on_delete=models.CASCADE)
+    ruta = models.OneToOneField('Ruta', on_delete=models.CASCADE) # Asumiendo que Ruta está definido
+    metodo_embarque = models.OneToOneField('MetodoEmbarque', on_delete=models.CASCADE) # Asumiendo que MetodoEmbarque está definido
     tipo_mercancia = models.OneToOneField('TipoMercancia', on_delete=models.CASCADE)
-    viaje = models.OneToOneField('Viaje', on_delete=models.CASCADE)
-    notas = models.OneToOneField('NotasNumeros', on_delete=models.CASCADE)
+    viaje = models.OneToOneField('Viaje', on_delete=models.CASCADE) # Asumiendo que Viaje está definido
+    notas = models.OneToOneField('NotasNumeros', on_delete=models.CASCADE) # Asumiendo que NotasNumeros está definido
 
-    # ✅ CAMPOS NUEVOS PARA AUDITORÍA Y CONTROL DE USUARIOS
+    # Campos de prima y auditoria
+    valor_prima_estimado = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    valor_prima_cobro = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    valor_prima_pago = models.DecimalField(max_digits=12, decimal_places=2, default=0.0)
+
     creado_por = models.ForeignKey(
-        Usuario, 
+        'Usuario', # Asumiendo que Usuario está definido
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
@@ -103,26 +107,61 @@ class CertificadoTransporte(models.Model):
     class Meta:
         verbose_name = 'Certificado de Transporte'
         verbose_name_plural = 'Certificados de Transporte'
-        ordering = ['-fecha_creacion']  # Ordenar por fecha más reciente primero
+        ordering = ['-fecha_creacion']
 
     def calcular_valor_asegurado(self):
+        # Accede a los valores de tipo_mercancia para el cálculo
         return (self.tipo_mercancia.valor_fca + self.tipo_mercancia.valor_flete) * Decimal('1.10')
 
     def calcular_valor_prima(self):
+        # Accede a las relaciones para obtener los datos necesarios
         tipo_carga = self.metodo_embarque.tipo_carga
         monto = self.calcular_valor_asegurado()
-    
+
         if tipo_carga == "PolizaCongelada":
             tasa = self.cliente.tasa_congelada
             minimo = self.cliente.valor_minimo_congelado
         else:
             tasa = self.cliente.tasa
             minimo = self.cliente.valor_minimo
-    
+
+        # --- Tus líneas de depuración ---
+        print(f"\n--- DEBUG CÁLCULO DE PRIMA (Desde CertificadoTransporte.save()) ---")
+        print(f"DEBUG: Monto Asegurado (monto): {monto}")
+        print(f"DEBUG: Tasa del Cliente (tasa): {tasa}")
+        print(f"DEBUG: Cálculo de Prima (tasa / 100): {tasa / 100}")
+        # ----------------------------------------
+
         prima = monto * (tasa / 100)
+        print(f"DEBUG: Resultado final de la Prima: {prima}")
+        print(f"--- FIN DEBUG ---")
         return max(prima, minimo)
 
-    
+    # ✅ AÑADIDO: Método save() para calcular la prima automáticamente
+    def save(self, *args, **kwargs):
+        # Esta bandera 'recalculate_prima' es opcional, puedes usarla si quieres
+        # forzar el recálculo en actualizaciones, o simplemente siempre recalcular.
+        recalculate_prima = kwargs.pop('recalculate_prima', False)
+
+        # Si es una nueva instancia (sin PK) o se fuerza el recálculo
+        if not self.pk or recalculate_prima:
+            try:
+                # Calcula la prima y asigna el valor
+                self.valor_prima_estimado = self.calcular_valor_prima()
+                
+                # Si valor_prima_cobro debe ser igual a valor_prima_estimado al crearse
+                if self.valor_prima_cobro is None: # Asegúrate de que solo se asigne si no tiene un valor ya
+                    self.valor_prima_cobro = self.valor_prima_estimado
+            except Exception as e:
+                # Importante: Maneja errores si las relaciones (tipo_mercancia, cliente, etc.)
+                # aún no están asignadas al objeto 'self' cuando save() es llamado.
+                print(f"ERROR al calcular prima en CertificadoTransporte.save(): {e}")
+                # Puedes optar por dejar los campos en None, o asignar un valor predeterminado como 0
+                self.valor_prima_estimado = Decimal('0.00')
+                self.valor_prima_cobro = Decimal('0.00')
+
+        super().save(*args, **kwargs) # Llama al método save() original de Django
+
     def __str__(self):
         return f"C-{self.id} - {self.cliente.nombre if self.cliente else 'Sin cliente'}"
     

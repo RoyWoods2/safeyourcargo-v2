@@ -474,7 +474,7 @@ def crear_certificado(request):
                     'direccion': certificado.cliente.direccion,
                     'comuna': certificado.cliente.region or 'Por definir',
                     'ciudad': certificado.cliente.ciudad,
-                    'valor_usd': certificado.tipo_mercancia.valor_prima,
+                    'valor_usd': certificado.valor_prima_estimado,
                     'fecha_emision': date.today()
                 }
             )
@@ -1895,12 +1895,14 @@ def buscar_puertos_api_externa(request):
 def test_email_view(request):
     try:
         send_mail(
-            'Asunto de Prueba desde Django y SendGrid', # Asunto actualizado
-            'Este es el cuerpo del mensaje de prueba enviado a través de SendGrid.', # Cuerpo actualizado
-            settings.DEFAULT_FROM_EMAIL, # Remitente: usará el correo configurado en DEFAULT_FROM_EMAIL (debe ser de tu dominio autenticado en SendGrid)
+            'Asunto de Prueba desde Django y Mailgun API', # Asunto actualizado para Mailgun
+            'Este es el cuerpo del mensaje de prueba enviado a través de Mailgun API.', # Cuerpo actualizado para Mailgun
+            settings.DEFAULT_FROM_EMAIL, # Remitente: usará el correo configurado en DEFAULT_FROM_EMAIL (debe ser de tu dominio de Mailgun)
             ['hans.ti@safeyourcargo.com', 'finanzas@safeyourcargo.com'], # Destinatarios
             fail_silently=False,
         )
-        return HttpResponse("Correo de prueba enviado con éxito a hans.ti@safeyourcargo.com y finanzas@safeyourcargo.com.")
+        # Mensaje de éxito actualizado para reflejar Mailgun
+        return HttpResponse("Correo de prueba enviado con éxito con Mailgun a hans.ti@safeyourcargo.com y finanzas@safeyourcargo.com.")
     except Exception as e:
-        return HttpResponse(f"Error al enviar el correo: {e}", status=500)
+        # Mensaje de error actualizado para reflejar Mailgun
+        return HttpResponse(f"Error al enviar el correo con Mailgun: {e}", status=500)

@@ -1,5 +1,5 @@
 {% extends 'core/base.html' %}
-
+{% load humanize %}
 {% block title %}Administración de Clientes - Safe Your Cargo{% endblock %}
 
 {% block content %}
@@ -81,10 +81,10 @@
                 <td>{{ cliente.pais }}</td>
                 <td>{{ cliente.ciudad }}</td>
                 <td>{{ cliente.region }}</td>
-                <td>{{ cliente.tasa }}</td>
-                <td>{{ cliente.tasa_congelada }}</td>
-                <td>{{ cliente.valor_minimo }}</td>
-                <td>{{ cliente.valor_minimo_congelado }}</td>
+                <td>{{ cliente.tasa|floatformat:2 }}%</td> {# Muestra 0.2 como 0.20% #}
+                <td>{{ cliente.tasa_congelada|floatformat:2 }}%</td> {# Muestra 0.2 como 0.20% #}
+                <td>${{ cliente.valor_minimo|floatformat:2|intcomma }}</td> {# Muestra 1000.00 como $1,000.00 #}
+                <td>${{ cliente.valor_minimo_congelado|floatformat:2|intcomma }}</td> {# Muestra 1000.00 como $1,000.00 #}
                 <td><span class="badge bg-success">Activo</span></td>
                 <td>{{ cliente.tramo_cobro }}</td>
                 <td>{{ cliente.tipo_cliente }}</td>
