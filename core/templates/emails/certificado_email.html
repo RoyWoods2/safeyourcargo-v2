@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Documentos de Certificado y Factura</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #1a1a1a; /* Fondo exterior del email, un negro suave */
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: #fff; /* Contenedor principal del contenido: blanco */
+            padding: 0; /* Eliminar padding aquí para que el header ocupe todo el ancho del container */
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden; /* Asegura que el border-radius se aplique correctamente */
+        }
+        .header {
+            text-align: center;
+            background-color: #000000; /* Fondo negro para el encabezado donde va el logo */
+            padding: 20px; /* Espacio alrededor del logo */
+            margin-bottom: 20px; /* Espacio debajo del encabezado */
+        }
+        .header img {
+            max-width: 150px; /* Ajusta el tamaño del logo si es necesario */
+            height: auto;
+        }
+        .content {
+            /* Añadir padding aquí para que el texto no esté pegado a los bordes del contenedor blanco */
+            padding: 0 30px 30px; 
+            color: #333; /* Color del texto dentro del contenido */
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            border-top: 1px solid #eee;
+            padding-top: 15px;
+            margin-top: 20px;
+            padding-bottom: 10px; /* Pequeño padding extra al final */
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="cid:logo_safeyourcargo" alt="SafeYourCargo Logo">
+        </div>
+        <div class="content">
+            <p>Estimado/a cliente,</p>
+            <p>Nos complace informarle que su Certificado de Transporte <strong>C-{{ certificado.id }}</strong> ha sido generado y los documentos asociados están listos.</p>
+            <p>Adjunto a este correo encontrará:</p>
+            <ul>
+                <li><strong>Certificado de Transporte C-{{ certificado.id }}</strong></li>
+                <li><strong>Factura Exenta Electrónica de Servicio</strong></li>
+            </ul>
+            <p>Estos documentos corresponden a su reciente solicitud de servicio con SafeYourCargo SPA.</p>
+            <p>Si tiene alguna pregunta o necesita asistencia adicional, no dude en contactarnos.</p>
+            <p>Saludos cordiales,</p>
+            <p>El equipo de SafeYourCargo SPA</p>
+        </div>
+        <div class="footer">
+            <p>&copy; {{ current_year }} SafeYourCargo SPA. Todos los derechos reservados.</p>
+            <p>Este es un correo electrónico automático, por favor no responda directamente a este mensaje.</p>
+        </div>
+    </div>
+</body>
+</html>

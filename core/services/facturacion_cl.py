@@ -4,15 +4,16 @@ import re
 import sys
 from zeep import Client
 from zeep.helpers import serialize_object
-from core.models import Factura
-from lxml import etree
+from core.models import Factura # Asegúrate de que esta importación sea correcta
+from lxml import etree # Importado correctamente
+
+
 # 🔐 Producción
 FACTURACION_WSDL = 'http://ws.facturacion.cl/WSDS/wsplano.asmx?wsdl'
 FACTURACION_USUARIO = 'SAFEYOURCARGOSPA'
 FACTURACION_RUT = '78087058-3'  # ← tu RUT real de empresa
 FACTURACION_CLAVE = '818bb129c1'  # ← clave de producción
 FACTURACION_PUERTO = '0'
-
 
 
 # 🔧 Limpieza de RUT para cumplir formato requerido
@@ -28,6 +29,7 @@ def limpiar_rut(rut: str) -> str:
 
 # ------------------------------------------
 # 🧾 Generar archivo plano de FACTURA EXENTA (DTE 34)
+# (Esta función no se usa si envías XML, pero la mantenemos por si acaso)
 # ------------------------------------------
 def generar_txt_factura_exenta(factura: Factura) -> str:
     certificado = factura.certificado
@@ -78,8 +80,11 @@ def emitir_factura_exenta_cl_xml(factura: Factura) -> dict:
         xml_data = generar_xml_factura_exenta(factura)
         ruta_debug = f"/var/www/uniCloud/xml_facturas/FACTURA_C{factura.certificado.id}.xml"
         try:
+            # Asegúrate de que el directorio exista antes de escribir el archivo
+            os.makedirs(os.path.dirname(ruta_debug), exist_ok=True) 
             with open(ruta_debug, "w", encoding="utf-8") as f:
                 f.write(xml_data)
+            print(f"✅ XML de factura generado y guardado localmente en {ruta_debug}")
         except Exception as e:
             print(f"⚠️ No se pudo guardar el XML localmente: {str(e)}")
 
@@ -92,35 +97,86 @@ def emitir_factura_exenta_cl_xml(factura: Factura) -> dict:
             'Rut': base64.b64encode(FACTURACION_RUT.encode()).decode(),
             'Clave': base64.b64encode(FACTURACION_CLAVE.encode()).decode(),
             'Puerto': base64.b64encode(FACTURACION_PUERTO.encode()).decode(),
-            'IncluyeLink': "1"
+            'IncluyeLink': "1" # Solicitar que incluya el link del PDF en la respuesta
         }
 
         # Consumir WebService
         client = Client(FACTURACION_WSDL)
         response = client.service.Procesar(login=login_info, file=encoded_file, formato="2")
-        respuesta_xml = serialize_object(response)
+        respuesta_xml = serialize_object(response) # Serializa el objeto de respuesta completo
+        print(f"DEBUG: Respuesta XML completa del WS: {respuesta_xml}") # Línea de depuración añadida
+
+        # Inicializar folio y URL a None, se actualizarán si se encuentran en la respuesta
+        folio_sii_obtenido = None
+        url_pdf_sii_obtenida = None
+
+        # Intentar extraer Folio
+        folio_match = re.search(r'<Folio>(\d+)</Folio>', respuesta_xml)
+        if folio_match:
+            folio_sii_obtenido = int(folio_match.group(1))
+            print(f"Folio SII extraído por regex: {folio_sii_obtenido}")
+
+        # Intentar extraer urlCedible y decodificarla
+        url_cedible_match = re.search(r'<urlCedible>(.*?)</urlCedible>', respuesta_xml)
+        if url_cedible_match:
+            base64_url = url_cedible_match.group(1)
+            try:
+                url_pdf_sii_obtenida = base64.b64decode(base64_url.encode('utf-8')).decode('utf-8')
+                print(f"URL PDF SII (cedible) extraída y decodificada: {url_pdf_sii_obtenida}")
+            except Exception as e:
+                print(f"❌ Error al decodificar URL cedible Base64: {e}")
+                url_pdf_sii_obtenida = None # Asegurarse de que sea None si falla la decodificación
+        else:
+            print("DEBUG: No se encontró <urlCedible> en la respuesta XML.")
+
 
         # Determinar estado basado en contenido
-        estado = "exito"
-        if "Ya existe el Documento" in respuesta_xml:
+        estado = "fallida" # Estado por defecto si no se encuentra un match claro
+        if "<Resultado>True</Resultado>" in respuesta_xml:
+            estado = "exito"
+            print(f"✅ Emisión SII exitosa para factura C-{factura.certificado.id}")
+        elif "Ya existe el Documento" in respuesta_xml:
             estado = "duplicado"
+            print(f"⚠️ Documento duplicado para factura C-{factura.certificado.id}.")
+            # Si es duplicado y tenemos el folio, intentar obtener el link oficial
+            if factura.folio_sii: # Usar el folio que ya tiene la factura (si lo tiene)
+                try:
+                    link_result = obtener_link_pdf_boleta(factura.folio_sii)
+                    if link_result['success']:
+                        url_pdf_sii_obtenida = link_result['url'] # Actualizar con el link recuperado
+                        print(f"URL PDF recuperada para duplicado usando folio existente: {url_pdf_sii_obtenida}")
+                except Exception as e_link:
+                    print(f"❌ Error al intentar recuperar URL para duplicado: {e_link}")
         elif "<Resultado>False</Resultado>" in respuesta_xml:
             estado = "fallida"
+            print(f"❌ Emisión SII fallida para factura C-{factura.certificado.id}. Respuesta detallada: {respuesta_xml}")
+        else:
+            estado = "fallida_inesperada"
+            print(f"❌ Respuesta del WS no contiene Resultado True/False o Ya existe (estado inesperado): {respuesta_xml}")
 
-        # Guardar estado en la factura
+
+        # Guardar estado, folio y URL en la factura
         factura.estado_emision = estado
-        factura.save()
+        if folio_sii_obtenido:
+            factura.folio_sii = folio_sii_obtenido
+        if url_pdf_sii_obtenida:
+            factura.url_pdf_sii = url_pdf_sii_obtenida
+        factura.save() # Guarda los cambios en la instancia de la factura
 
         return {
-            'success': True,
-            'respuesta': respuesta_xml,
-            'archivo_xml': ruta_debug
+            'success': estado == "exito", # Solo es éxito si el estado final es 'exito'
+            'estado_emision': estado,
+            'folio_sii': factura.folio_sii, # Retorna el folio que ahora está en la factura
+            'url_pdf_sii': factura.url_pdf_sii, # Retorna la URL que ahora está en la factura
+            'respuesta_completa': respuesta_xml # Para depuración
         }
 
     except Exception as e:
-        factura.estado_emision = "fallida"
-        factura.save()
-        return {'success': False, 'error': str(e)}
+        # Captura cualquier excepción que ocurra durante el proceso (conexión, parsing, etc.)
+        factura.estado_emision = "fallida_exception"
+        factura.save() # Guarda el estado de falla
+        print(f"❌ Error crítico en emitir_factura_exenta_cl_xml: {e}")
+        return {'success': False, 'error': str(e), 'estado_emision': 'fallida_exception'}
 
 
 # 🔗 Obtener el PDF oficial desde facturacion.cl
@@ -142,15 +198,18 @@ def obtener_link_pdf_boleta(folio: int, tipo_dte: int = 34) -> dict:
             folio=str(folio)
         )
 
-        if hasattr(response, 'Mensaje'):
+        if hasattr(response, 'Mensaje') and response.Mensaje:
             url_base64 = response.Mensaje
             url_decodificada = base64.b64decode(url_base64.encode()).decode()
+            print(f"URL de PDF obtenida por ObtenerLink para folio {folio}: {url_decodificada}")
             return {'success': True, 'url': url_decodificada}
 
-        return {'success': False, 'error': 'No se encontró el campo Mensaje en la respuesta.'}
+        return {'success': False, 'error': 'No se encontró el campo Mensaje en la respuesta para ObtenerLink.'}
 
     except Exception as e:
+        print(f"❌ Error en obtener_link_pdf_boleta para folio {folio}: {e}")
         return {'success': False, 'error': str(e)}
+
 def normalizar_rut(rut: str) -> str:
     """
     Devuelve el RUT con guion y sin puntos. Ej: '60.905.000-K' -> '60905000-K'
@@ -163,7 +222,7 @@ def normalizar_rut(rut: str) -> str:
 def generar_xml_factura_exenta(factura: Factura) -> str:
     from lxml import etree
     import re
-    from core.services.facturacion_cl import limpiar_rut
+    # Ya está importado, no es necesario importar de nuevo: from core.services.facturacion_cl import limpiar_rut
 
     certificado = factura.certificado
     cliente = certificado.cliente
@@ -180,7 +239,10 @@ def generar_xml_factura_exenta(factura: Factura) -> str:
 
     iddoc = etree.SubElement(encabezado, "IdDoc")
     etree.SubElement(iddoc, "TipoDTE").text = "34"
-    etree.SubElement(iddoc, "Folio").text = str(factura.folio_sii)
+    # IMPORTANTE: Aquí se usa factura.folio_sii. Asegúrate de que este campo esté
+    # poblado con el folio que tu sistema le asigna a la factura *antes* de llamara esta función.
+    # El SII valida este folio contra los rangos autorizados.
+    etree.SubElement(iddoc, "Folio").text = str(factura.folio_sii) 
     etree.SubElement(iddoc, "FchEmis").text = factura.fecha_emision.strftime("%Y-%m-%d")
 
     emisor = etree.SubElement(encabezado, "Emisor")

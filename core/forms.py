@@ -73,9 +73,18 @@ class UsuarioForm(forms.ModelForm):
 
 
 class CertificadoTransporteForm(forms.ModelForm):
+    # Añade este campo al formulario, igual que en la sugerencia anterior
+    otros_emails_copia = forms.CharField(
+        label='Enviar copia a otros emails (separados por coma)',
+        required=False, # Este campo es opcional
+        help_text='Ej: email1@ejemplo.com, email2@ejemplo.com',
+        widget=forms.TextInput(attrs={'placeholder': 'email1@dominio.com, email2@dominio.com'})
+    )
+
     class Meta:
         model = CertificadoTransporte
-        fields = ['cliente', 'fecha_partida', 'fecha_llegada']
+        # ¡IMPORTANTE! Añade 'otros_emails_copia' a la lista de fields
+        fields = ['cliente', 'fecha_partida', 'fecha_llegada', 'otros_emails_copia']
         widgets = {
             'cliente': ClienteSelectWidget(attrs={'class': 'form-select', 'id': 'id_cliente'}),
             'fecha_partida': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),

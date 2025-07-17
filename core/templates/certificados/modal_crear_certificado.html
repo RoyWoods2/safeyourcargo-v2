@@ -47,294 +47,306 @@
 
       <div class="modal-body">
         <form id="form-certificado" method="post">
-          {% csrf_token %}
+    {% csrf_token %}
 
-          <!-- INFO GENERAL -->
-          <div class="section-container">
-            <span class="badge text-white">INFORMACIÓN GENERAL</span>
-            <div class="row mb-3 mt-3">
-              <div class="col-md-6">
-                <label class="form-label">Póliza</label>
-                <input type="text" class="form-control bg-light" value="01930324AA" readonly>
-              </div>
-              <div class="col-md-6">
-                <label class="form-label">Compañía</label>
-                <input type="text" class="form-control bg-light" value="SafeYourCargo" readonly>
-              </div>
-            </div>
-            <div class="row mb-3">
-              <div class="col-md-6">
-  <label class="form-label">Cliente</label>
-  {{ cert_form.cliente }}
-</div>
-
-
-              <div class="col-md-3">
-                <label class="form-label">Fecha Partida</label>
-                {{ cert_form.fecha_partida }}
-              </div>
-              <div class="col-md-3">
-                <label class="form-label">Fecha Llegada</label>
-                {{ cert_form.fecha_llegada }}
-              </div>
-            </div>
-          </div>
-
-          <!-- RUTA -->
-          <div class="section-container">
-            <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
-            <div class="row mb-3 mt-3">
-<div class="col-md-6">
-  <label class="form-label">País de origen del producto</label>
-  <select id="paisOrigen" name="pais_origen" class="form-select">
-    <option value="">Seleccione un país</option>
-  </select>
-</div>
-
-<div class="col-md-6">
-  <label class="form-label">Ciudad de origen del producto</label>
-  <select id="ciudadOrigen" name="ciudad_origen" class="form-select">
-    <option value="">Seleccione una ciudad</option>
-  </select>
-</div>
-
-              <div class="col-md-6">
-  <label class="form-label">País Destino</label>
-  <select id="paisDestino" name="pais_destino" class="form-select">
-    <option value="">Seleccione un país</option>
-  </select>
-</div>
-
-<div class="col-md-6">
-  <label class="form-label">Ciudad Destino</label>
-  <select id="ciudadDestino" name="ciudad_destino" class="form-select">
-    <option value="">Seleccione una ciudad</option>
-  </select>
-</div>
-
-            </div>
-          </div>
-<!-- EMBARQUE -->
-<div class="section-container">
-  <span class="badge text-white">EMBARQUE</span>
-  <div class="row mb-3 mt-3">
-    <div class="col-md-6">
-      <label class="form-label">Modo de Transporte</label>
-      <select class="form-select" id="modoTransporte" name="modo_transporte">
-        <option value="">Seleccione</option>
-        <option value="Aereo">Aéreo</option>
-        <option value="Maritimo">Marítimo</option>
-        <option value="TerrestreFerroviario">Terrestre / Ferroviario</option>
-      </select>
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">Tipo de Carga</label>
-      {{ metodo_form.tipo_carga }}
-    </div>
-    <div class="col-md-6">
-      <label class="form-label">Cláusula</label>
-      {{ metodo_form.clausula }}
-    </div>
-
-    <!-- AÉREO -->
-    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_aereo">
-      <label class="form-label">Tipo de Embalaje (Aéreo)</label>
-      <select class="form-select" id="tipoEmbalajeAereo" name="tipo_embalaje_aereo">
-        <option value="">Seleccione una opción</option>
-        <option value="Cajas de Carton">Cajas de Carton</option>
-        <option value="Cajas de madera">Cajas de madera</option>
-        <option value="Cajas de plástico">Cajas de plástico</option>
-        <option value="Pallets">Pallets</option>
-        <option value="OTRO">OTRO (especificar)</option>
-      </select>
-    </div>
-
-    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_aereo">
-      <label class="form-label">Especificar otro tipo de embalaje (Aéreo)</label>
-      <input type="text" class="form-control" id="otroEmbalajeAereo" name="otro_embalaje_aereo">
-    </div>
-
-    <!-- MARÍTIMO -->
-    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_maritimo">
-      <label class="form-label">Tipo de Embalaje Marítimo</label>
-      <select class="form-select" id="embalajeMaritimo" name="embalaje_maritimo">
-        <option value="">Seleccione</option>
-        <option value="FCL">FCL (Contenedor Completo)</option>
-        <option value="LCL">LCL (Carga Suelta)</option>
-      </select>
-    </div>
-
-    <div class="col-md-6 mt-2 d-none" id="grupo_tipo_container_maritimo">
-      <label class="form-label">Tipo de Contenedor (FCL)</label>
-      <select class="form-select" id="tipoContainerMaritimo" name="tipo_container_maritimo">
-        <option value="">Seleccione</option>
-        <option value="DRY">DRY</option>
-        <option value="REEFER">REEFER</option>
-        <option value="HIGH CUBE">HIGH CUBE</option>
-        <option value="OPEN TOP">OPEN TOP</option>
-        <option value="FLAT RACK">FLAT RACK</option>
-        <option value="FLEX TANK">FLEX TANK</option>
-        <option value="ISO TANK">ISO TANK</option>
-        <option value="FLEXI TANK">FLEXI TANK</option>
-      </select>
-    </div>
-
-    <div class="col-md-6 mt-2 d-none" id="grupo_tipo_embalaje_maritimo_lcl">
-      <label class="form-label">Tipo de Embalaje (LCL)</label>
-      <select class="form-select" id="tipoEmbalajeLCL" name="tipo_embalaje_lcl">
-        <option value="">Seleccione</option>
-        <option value="Cajas de Carton">Cajas de Carton</option>
-        <option value="Cajas de Madera">Cajas de Madera</option>
-        <option value="Cajas de Plasticos">Cajas de Plástico</option>
-        <option value="Pallets">Pallets</option>
-        <option value="OTRO">OTRO (especificar)</option>
-      </select>
-    </div>
-
-    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_lcl">
-      <label class="form-label">Especificar otro tipo de embalaje (LCL)</label>
-      <input type="text" class="form-control" id="otroEmbalajeLCL" name="otro_embalaje_lcl">
-    </div>
-
-    <!-- TERRESTRE -->
-    <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_terrestre">
-      <label class="form-label">Tipo de Embalaje (Terrestre)</label>
-      <select class="form-select" id="tipoEmbalajeTerrestre" name="tipo_embalaje_terrestre">
-        <option value="">Seleccione una opción</option>
-        <option value="Cajas de Carton">Cajas de Carton</option>
-        <option value="Cajas de Madera">Cajas de Madera</option>
-        <option value="Cajas de Plástico">Cajas de Plástico</option>
-        <option value="Pallets">Pallets</option>
-        <option value="OTRO">OTRO (especificar)</option>
-      </select>
-    </div>
-
-    <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_terrestre">
-      <label class="form-label">Especificar otro tipo de embalaje (Terrestre)</label>
-      <input type="text" class="form-control" id="otroEmbalajeTerrestre" name="otro_embalaje_terrestre">
-    </div>
-  </div>
-</div>
-
-<!-- VALORES Y PRIMA -->
-<div class="section-container">
-  <span class="badge text-white">💰 VALORES Y PRIMA</span>
-  <div class="row mb-3 mt-3">
-    
-    <!-- Tipo de Mercancía -->
-    <div class="col-md-6">
-      <label class="form-label">Tipo de Mercancía</label>
-      {{ mercancia_form.tipo }}
-    </div>
-
-    <!-- Valor FCA -->
-    <div class="col-md-3">
-      <label class="form-label">Valor FCA (USD)</label>
-      {{ mercancia_form.valor_fca }}
-    </div>
-
-    <!-- Valor Flete -->
-    <div class="col-md-3">
-      <label class="form-label">Valor Flete (USD)</label>
-      {{ mercancia_form.valor_flete }}
-    </div>
-
-    <!-- Monto Asegurado (visible) -->
-    <div class="col-md-3 mt-3">
-      <label class="form-label">Monto Asegurado</label>
-      <input type="text" class="form-control" id="montoAsegurado" readonly>
-      <input type="hidden" name="monto_asegurado" id="montoAseguradoHidden">
-    </div>
-
-    <!-- Cambiar prima manualmente -->
-    <div class="col-md-12 mt-3">
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" id="togglePrima">
-        <label class="form-check-label" for="togglePrima">Cambiar prima manualmente</label>
+    <div class="section-container">
+      <span class="badge text-white">INFORMACIÓN GENERAL</span>
+      <div class="row mb-3 mt-3">
+        <div class="col-md-6">
+          <label class="form-label">Póliza</label>
+          <input type="text" class="form-control bg-light" value="01930324AA" readonly>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Compañía</label>
+          <input type="text" class="form-control bg-light" value="SafeYourCargo" readonly>
+        </div>
+      </div>
+      <div class="row mb-3">
+        <div class="col-md-6">
+          <label class="form-label">Cliente</label>
+          {{ cert_form.cliente }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Fecha Partida</label>
+          {{ cert_form.fecha_partida }}
+        </div>
+        <div class="col-md-3">
+          <label class="form-label">Fecha Llegada</label>
+          {{ cert_form.fecha_llegada }}
+        </div>
       </div>
     </div>
 
-    <!-- Valor Prima (formateado visible) -->
-<!-- Valor Prima (mostrado formateado) -->
-<div class="col-md-3 mt-2">
-  <label class="form-label">Valor Prima (USD)</label>
-  <input type="text" id="valorPrimaFormateado" class="form-control" readonly>
-  <input type="hidden" id="id_valor_prima" name="valor_prima">
-</div>
+    <div class="section-container">
+      <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
+      <div class="row mb-3 mt-3">
+        <div class="col-md-6">
+          <label class="form-label">País de origen del producto</label>
+          <select id="paisOrigen" name="pais_origen" class="form-select">
+            <option value="">Seleccione un país</option>
+          </select>
+        </div>
 
+        <div class="col-md-6">
+          <label class="form-label">Ciudad de origen del producto</label>
+          <select id="ciudadOrigen" name="ciudad_origen" class="form-select">
+            <option value="">Seleccione una ciudad</option>
+          </select>
+        </div>
 
-  </div>
+        <div class="col-md-6">
+          <label class="form-label">País Destino</label>
+          <select id="paisDestino" name="pais_destino" class="form-select">
+            <option value="">Seleccione un país</option>
+          </select>
+        </div>
 
+        <div class="col-md-6">
+          <label class="form-label">Ciudad Destino</label>
+          <select id="ciudadDestino" name="ciudad_destino" class="form-select">
+            <option value="">Seleccione una ciudad</option>
+          </select>
+        </div>
+
+      </div>
+    </div>
+    <div class="section-container">
+      <span class="badge text-white">EMBARQUE</span>
+      <div class="row mb-3 mt-3">
+        <div class="col-md-6">
+          <label class="form-label">Modo de Transporte</label>
+          <select class="form-select" id="modoTransporte" name="modo_transporte">
+            <option value="">Seleccione</option>
+            <option value="Aereo">Aéreo</option>
+            <option value="Maritimo">Marítimo</option>
+            <option value="TerrestreFerroviario">Terrestre / Ferroviario</option>
+          </select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Tipo de Carga</label>
+          {{ metodo_form.tipo_carga }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Cláusula</label>
+          {{ metodo_form.clausula }}
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_aereo">
+          <label class="form-label">Tipo de Embalaje (Aéreo)</label>
+          <select class="form-select" id="tipoEmbalajeAereo" name="tipo_embalaje_aereo">
+            <option value="">Seleccione una opción</option>
+            <option value="Cajas de Carton">Cajas de Carton</option>
+            <option value="Cajas de madera">Cajas de madera</option>
+            <option value="Cajas de plástico">Cajas de plástico</option>
+            <option value="Pallets">Pallets</option>
+            <option value="OTRO">OTRO (especificar)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_aereo">
+          <label class="form-label">Especificar otro tipo de embalaje (Aéreo)</label>
+          <input type="text" class="form-control" id="otroEmbalajeAereo" name="otro_embalaje_aereo">
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_maritimo">
+          <label class="form-label">Tipo de Embalaje Marítimo</label>
+          <select class="form-select" id="embalajeMaritimo" name="embalaje_maritimo">
+            <option value="">Seleccione</option>
+            <option value="FCL">FCL (Contenedor Completo)</option>
+            <option value="LCL">LCL (Carga Suelta)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_tipo_container_maritimo">
+          <label class="form-label">Tipo de Contenedor (FCL)</label>
+          <select class="form-select" id="tipoContainerMaritimo" name="tipo_container_maritimo">
+            <option value="">Seleccione</option>
+            <option value="DRY">DRY</option>
+            <option value="REEFER">REEFER</option>
+            <option value="HIGH CUBE">HIGH CUBE</option>
+            <option value="OPEN TOP">OPEN TOP</option>
+            <option value="FLAT RACK">FLAT RACK</option>
+            <option value="FLEX TANK">FLEX TANK</option>
+            <option value="ISO TANK">ISO TANK</option>
+            <option value="FLEXI TANK">FLEXI TANK</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_tipo_embalaje_maritimo_lcl">
+          <label class="form-label">Tipo de Embalaje (LCL)</label>
+          <select class="form-select" id="tipoEmbalajeLCL" name="tipo_embalaje_lcl">
+            <option value="">Seleccione</option>
+            <option value="Cajas de Carton">Cajas de Carton</option>
+            <option value="Cajas de Madera">Cajas de Madera</option>
+            <option value="Cajas de Plasticos">Cajas de Plástico</option>
+            <option value="Pallets">Pallets</option>
+            <option value="OTRO">OTRO (especificar)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_lcl">
+          <label class="form-label">Especificar otro tipo de embalaje (LCL)</label>
+          <input type="text" class="form-control" id="otroEmbalajeLCL" name="otro_embalaje_lcl">
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_terrestre">
+          <label class="form-label">Tipo de Embalaje (Terrestre)</label>
+          <select class="form-select" id="tipoEmbalajeTerrestre" name="tipo_embalaje_terrestre">
+            <option value="">Seleccione una opción</option>
+            <option value="Cajas de Carton">Cajas de Carton</option>
+            <option value="Cajas de Madera">Cajas de Madera</option>
+            <option value="Cajas de Plástico">Cajas de Plástico</option>
+            <option value="Pallets">Pallets</option>
+            <option value="OTRO">OTRO (especificar)</option>
+          </select>
+        </div>
+
+        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_terrestre">
+          <label class="form-label">Especificar otro tipo de embalaje (Terrestre)</label>
+          <input type="text" class="form-control" id="otroEmbalajeTerrestre" name="otro_embalaje_terrestre">
+        </div>
+      </div>
+    </div>
+
+    <div class="section-container">
+      <span class="badge text-white">💰 VALORES Y PRIMA</span>
+      <div class="row mb-3 mt-3">
+
+        <div class="col-md-6">
+          <label class="form-label">Tipo de Mercancía</label>
+          {{ mercancia_form.tipo }}
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Valor FCA (USD)</label>
+          {{ mercancia_form.valor_fca }}
+        </div>
+
+        <div class="col-md-3">
+          <label class="form-label">Valor Flete (USD)</label>
+          {{ mercancia_form.valor_flete }}
+        </div>
+
+        <div class="col-md-3 mt-3">
+          <label class="form-label">Monto Asegurado</label>
+          <input type="text" class="form-control" id="montoAsegurado" readonly>
+          <input type="hidden" name="monto_asegurado" id="montoAseguradoHidden">
+        </div>
+
+        <div class="col-md-12 mt-3">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox" id="togglePrima">
+            <label class="form-check-label" for="togglePrima">Cambiar prima manualmente</label>
           </div>
+        </div>
 
-          <!-- DETALLE DE VIAJE -->
-          <div class="section-container">
-            <span class="badge text-white">DETALLES DEL VIAJE</span>
-            <div class="row mb-3 mt-3">
-<div class="col-md-6">
-  <label class="form-label" id="label_nombre_transporte">Nombre Avión / Línea Aérea</label>
-  {{ viaje_form.nombre_avion }}
-</div>
+        <div class="col-md-3 mt-2">
+          <label class="form-label">Valor Prima (USD)</label>
+          <input type="text" id="valorPrimaFormateado" class="form-control" readonly>
+          <input type="hidden" id="id_valor_prima" name="valor_prima">
+        </div>
 
-<div class="col-md-6">
-  <label class="form-label" id="label_numero_viaje">N° Viaje / Vuelo</label>
-  {{ viaje_form.numero_viaje }}
-</div>
-<div class="col-md-6">
-  <label class="form-label">País de inicio del viaje</label>
-  <select id="vueloOrigenPais" name="vuelo_origen_pais" class="form-select">
-    <option value="">Seleccione un país</option>
-  </select>
-</div>
+      </div>
 
-<div class="col-md-6">
-  <label class="form-label">Ciudad de inicio del viaje</label>
-  <select id="vueloOrigenCiudad" name="vuelo_origen_ciudad" class="form-select">
-    <option value="">Seleccione una ciudad</option>
-  </select>
-</div>
+    </div>
 
-<div class="col-md-6">
-  <label class="form-label">País de destino del viaje</label>
-  <select id="vueloDestinoPais" name="vuelo_destino_pais" class="form-select">
-    <option value="">Seleccione un país</option>
-  </select>
-</div>
+    <div class="section-container">
+      <span class="badge text-white">DETALLES DEL VIAJE</span>
+      <div class="row mb-3 mt-3">
+        <div class="col-md-6">
+          <label class="form-label" id="label_nombre_transporte">Nombre Avión / Línea Aérea</label>
+          {{ viaje_form.nombre_avion }}
+        </div>
 
-<div class="col-md-6">
-  <label class="form-label"> Ciudad de destino del viaje</label>
-  <select id="vueloDestinoCiudad" name="vuelo_destino_ciudad" class="form-select">
-    <option value="">Seleccione una ciudad</option>
-  </select>
-</div>
+        <div class="col-md-6">
+          <label class="form-label" id="label_numero_viaje">N° Viaje / Vuelo</label>
+          {{ viaje_form.numero_viaje }}
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">País de inicio del viaje</label>
+          <select id="vueloOrigenPais" name="vuelo_origen_pais" class="form-select">
+            <option value="">Seleccione un país</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">Ciudad de inicio del viaje</label>
+          <select id="vueloOrigenCiudad" name="vuelo_origen_ciudad" class="form-select">
+            <option value="">Seleccione una ciudad</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label">País de destino del viaje</label>
+          <select id="vueloDestinoPais" name="vuelo_destino_pais" class="form-select">
+            <option value="">Seleccione un país</option>
+          </select>
+        </div>
+
+        <div class="col-md-6">
+          <label class="form-label"> Ciudad de destino del viaje</label>
+          <select id="vueloDestinoCiudad" name="vuelo_destino_ciudad" class="form-select">
+            <option value="">Seleccione una ciudad</option>
+          </select>
+        </div>
 
 
-              
-<div class="col-md-6" id="grupo_aeropuerto_origen">
-  <label class="form-label" id="label_aeropuerto_origen">Aeropuerto Origen</label>
-  {{ viaje_form.aeropuerto_origen }}
-</div>
+        <div class="col-md-6" id="grupo_aeropuerto_origen">
+          <label class="form-label" id="label_aeropuerto_origen">Aeropuerto Origen</label>
+          {{ viaje_form.aeropuerto_origen }}
+        </div>
 
-<div class="col-md-6" id="grupo_aeropuerto_destino">
-  <label class="form-label" id="label_aeropuerto_destino">Aeropuerto Destino</label>
-  {{ viaje_form.aeropuerto_destino }}
-</div>
+        <div class="col-md-6" id="grupo_aeropuerto_destino">
+          <label class="form-label" id="label_aeropuerto_destino">Aeropuerto Destino</label>
+          {{ viaje_form.aeropuerto_destino }}
+        </div>
 
-              <div class="col-12 mt-2"><label class="form-label">Descripción</label>{{ viaje_form.descripcion_carga }}</div>
-            </div>
-          </div>
+        <div class="col-12 mt-2"><label class="form-label">Descripción</label>{{ viaje_form.descripcion_carga }}</div>
+      </div>
+    </div>
 
-          <!-- NOTAS -->
-          <div class="section-container">
-            <span class="badge text-white">NOTAS Y NÚMEROS</span>
-            <div class="row mb-3 mt-3">
-              <div class="col-md-4"><label class="form-label">Referencia</label>{{ notas_form.referencia }}</div>
-              <div class="col-md-4"><label class="form-label">Guía de Carga</label>{{ notas_form.guia_carga }}</div>
-              <div class="col-md-4"><label class="form-label">N° Factura</label>{{ notas_form.numero_factura }}</div>
-              <div class="col-12 mt-2"><label class="form-label">Notas</label>{{ notas_form.notas }}</div>
-            </div>
-          </div>
-        </form>
+    <div class="section-container">
+      <span class="badge text-white">NOTAS Y NÚMEROS</span>
+      <div class="row mb-3 mt-3">
+        <div class="col-md-4"><label class="form-label">Referencia</label>{{ notas_form.referencia }}</div>
+        <div class="col-md-4"><label class="form-label">Guía de Carga</label>{{ notas_form.guia_carga }}</div>
+        <div class="col-md-4"><label class="form-label">N° Factura</label>{{ notas_form.numero_factura }}</div>
+        <div class="col-12 mt-2"><label class="form-label">Notas</label>{{ notas_form.notas }}</div>
+      </div>
+    </div>
+
+    <div class="section-container">
+      <span class="badge text-white">OPCIONES DE ENVÍO</span>
+      <div class="form-check mb-3 mt-3">
+        <input class="form-check-input" type="checkbox" id="toggleOtrosEmails">
+        <label class="form-check-label" for="toggleOtrosEmails">
+          ¿Deseas enviar copias del certificado y factura a otros emails?
+        </label>
+      </div>
+
+      <div id="otrosEmailsContainer" style="display: none;">
+        {{ cert_form.otros_emails_copia }}
+      </div>
+    </div>
+
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const toggleOtrosEmails = document.getElementById('toggleOtrosEmails');
+        const otrosEmailsContainer = document.getElementById('otrosEmailsContainer');
+
+        if (toggleOtrosEmails && otrosEmailsContainer) {
+            toggleOtrosEmails.addEventListener('change', function() {
+                if (this.checked) {
+                    otrosEmailsContainer.style.display = 'block';
+                } else {
+                    otrosEmailsContainer.style.display = 'none';
+                }
+            });
+        }
+    });
+</script>
       </div>
 
       <div class="modal-footer">
@@ -537,7 +549,7 @@ document.addEventListener("DOMContentLoaded", function () {
         let mensaje = "";
         for (const [formulario, errores] of Object.entries(data.errors)) {
           for (const [campo, lista] of Object.entries(errores)) {
-            mensaje += `- ${campo}: ${lista.join(", ")}\n`;
+            mensaje += `- ${campo}: ${Array.isArray(lista) ? lista.join(", ") : lista}\\n`;
           }
         }
         Swal.fire({

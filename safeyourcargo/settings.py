@@ -136,3 +136,4 @@ ANYMAIL = {
 # Configuración del remitente por defecto para todos los correos de Django
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@safeyourcargo.com')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
+print(f"DEBUG: DEFAULT_FROM_EMAIL cargado: {DEFAULT_FROM_EMAIL}") # <--- AGREGAR ESTA LÍNEA TEMPORAL

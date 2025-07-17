@@ -8,7 +8,6 @@ from datetime import date
 from .models import Factura
 from .utils import obtener_dolar_observado
 
-
 def generar_pdf_certificado(certificado, request):
     html_string = render_to_string('certificados/certificado_pdf.html', {
         'certificado': certificado,
@@ -18,9 +17,9 @@ def generar_pdf_certificado(certificado, request):
     pdf_buffer.seek(0)
     return pdf_buffer
 
-
 def generar_pdf_factura(certificado, request):
-    factura, _ = Factura.objects.get_or_create(
+    # Retrieve or create the Factura object
+    factura_instance, _ = Factura.objects.get_or_create(
         certificado=certificado,
         defaults={
             'numero': Factura.objects.count() + 1,
@@ -34,23 +33,26 @@ def generar_pdf_factura(certificado, request):
         }
     )
 
-    factura.valor_usd = certificado.tipo_mercancia.valor_prima
+    factura_instance.valor_usd = certificado.tipo_mercancia.valor_prima
 
+    # Get the dollar exchange rate
     resultado = obtener_dolar_observado("hans.arancibia@live.com", "Rhad19326366.")
-    dolar = Decimal(resultado.get("valor", '950.00'))
-    factura.tipo_cambio = dolar
-    factura.valor_clp = (factura.valor_usd or Decimal('0.0')) * dolar
-    factura.save()
+    dolar = Decimal(resultado.get("valor", '950.00')) # Default to 950.00 if not found
 
-    total_palabras = num2words(int(factura.valor_clp), lang='es').replace("coma cero cero", "")
-    fecha_formateada = date_format(factura.fecha_emision, "d \d\e F \d\e Y")
+    # Calculate and assign valor_clp
+    factura_instance.tipo_cambio = dolar
+    factura_instance.valor_clp = (factura_instance.valor_usd or Decimal('0.0')) * dolar
+    factura_instance.save()
+
+    # Use factura_instance.valor_clp for num2words
+    total_palabras = num2words(int(factura_instance.valor_clp), lang='es').replace("coma cero cero", "")
+    fecha_formateada = date_format(factura_instance.fecha_emision, "d \\d\\e F \\d\\e Y")
 
     html_string = render_to_string('certificados/factura_pdf.html', {
-        'factura': factura,
-        'total_palabras': total_palabras,
-        'fecha_formateada': fecha_formateada,
+        'factura': factura_instance, # Ensure the correct Factura object is passed to the template
+        'total_palabras': total_palabras, # Pass total_palabras to the template if needed
+        'fecha_formateada': fecha_formateada, # Pass formatted date to the template if needed
     })
-
     pdf_buffer = io.BytesIO()
     HTML(string=html_string, base_url=request.build_absolute_uri()).write_pdf(pdf_buffer)
     pdf_buffer.seek(0)

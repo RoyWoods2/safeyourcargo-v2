@@ -263,7 +263,7 @@ class Factura(models.Model):
     direccion = models.CharField(max_length=255)
     comuna = models.CharField(max_length=100)
     ciudad = models.CharField(max_length=100)
-
+    url_pdf_sii = models.URLField(max_length=500, null=True, blank=True, verbose_name='URL PDF SII')
     folio_sii = models.PositiveIntegerField(null=True, blank=True, unique=True)
     observaciones = models.TextField(blank=True, null=True)
     estado_emision = models.CharField(max_length=20, null=True, blank=True, choices=[
@@ -273,16 +273,10 @@ class Factura(models.Model):
     ('duplicado', 'Folio ya usado')
 ])
 def save(self, *args, **kwargs):
-    envio_automatico = self.pk is None
-    self.valor_clp = self.valor_usd * self.tipo_cambio
+    # La lógica de valor_clp y la llamada a enviar_factura_y_certificado
+    # se han movido a la vista 'crear_certificado' para un mejor control
+    # del flujo de emisión del DTE y envío de correos.
     super().save(*args, **kwargs)
-
-    if envio_automatico:
-        try:
-            from core.utils import enviar_factura_y_certificado
-            enviar_factura_y_certificado(self)
-        except Exception as e:
-            print(f"❌ Error al enviar automáticamente correo con factura y certificado: {e}")
 
 
 # ✅ FUNCIÓN LIBRE (fuera del modelo)
