@@ -39,13 +39,16 @@ from django.views.decorators.http import require_http_methods
 from .utils_pdf import generar_pdf_certificado, generar_pdf_factura  
 from django.contrib.admin.views.decorators import staff_member_required
 from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime
+from datetime import datetime,timedelta
 import openpyxl
 from openpyxl.utils import get_column_letter
 from openpyxl.styles import Alignment, Font
 from core.emails import enviar_certificado_y_factura
 from django.http import HttpResponseForbidden
 from django.utils.html import strip_tags
+from .api_client import nsure_api
+
+from django.views import View
 Usuario = get_user_model()
 
 @login_required
@@ -737,17 +740,38 @@ from django.http import HttpResponseForbidden
 
 @login_required
 def vista_cobranzas(request):
-    if not request.user.is_superuser:
-        return HttpResponseForbidden("No tienes permiso para acceder a esta página.")
+    current_user = request.user
 
+    # Inicia con todas las cobranzas
     cobranzas = Cobranza.objects.select_related(
         'certificado', 'certificado__cliente', 'certificado__metodo_embarque', 'certificado__factura', 'certificado__notas'
-    ).all()
+    )
 
-    # Filtros desde GET
+    # Excepción para superadministradores: Si el usuario es superadmin, ve todos los certificados.
+    if current_user.is_superuser:
+        # No se aplica ningún filtro de usuario; el queryset ya contiene todos los objetos.
+        pass
+    else:
+        # Filtrado basado en la jerarquía de usuario para usuarios no superadmin
+        if current_user.rol == 'Administrador':
+            # Un administrador regular (no superadmin) puede ver todos los certificados.
+            # Esto asume que 'Administrador' no es superadmin, o si es superadmin, ya lo manejamos arriba.
+            # Si un 'Administrador' regular solo debe ver sus propios y sub-usuarios, ajustar aquí.
+            # Por ahora, se mantiene como "ver todo" para el rol 'Administrador' si no es superuser.
+            pass
+        elif current_user.rol == 'Revendedor':
+            # Un revendedor puede ver certificados creados por ellos y por los usuarios que crearon.
+            sub_user_ids = Usuario.objects.filter(creado_por=current_user).values_list('id', flat=True)
+            allowed_user_ids = list(sub_user_ids) + [current_user.id]
+            cobranzas = cobranzas.filter(certificado__creado_por__id__in=allowed_user_ids)
+        else: # Rol 'Usuario' por defecto o cualquier otro
+            # Un usuario regular solo puede ver los certificados que él mismo creó.
+            cobranzas = cobranzas.filter(certificado__creado_por=current_user)
+
+    # Aplica los filtros existentes de la solicitud GET
     cliente = request.GET.get("cliente")
     rut = request.GET.get("rut")
-    certificado = request.GET.get("certificado")
+    certificado_id = request.GET.get("certificado")
     inicio = request.GET.get("inicio")
     fin = request.GET.get("fin")
 
@@ -755,8 +779,12 @@ def vista_cobranzas(request):
         cobranzas = cobranzas.filter(certificado__cliente__nombre__icontains=cliente)
     if rut:
         cobranzas = cobranzas.filter(certificado__cliente__rut__icontains=rut)
-    if certificado:
-        cobranzas = cobranzas.filter(certificado__id__icontains=certificado)
+    if certificado_id:
+        try:
+            certificado_id = int(certificado_id)
+            cobranzas = cobranzas.filter(certificado__id=certificado_id)
+        except ValueError:
+            cobranzas = cobranzas.none()
     if inicio:
         try:
             fecha_inicio = datetime.strptime(inicio, "%Y-%m-%d").date()
@@ -766,14 +794,17 @@ def vista_cobranzas(request):
     if fin:
         try:
             fecha_fin = datetime.strptime(fin, "%Y-%m-%d").date()
-            cobranzas = cobranzas.filter(certificado__fecha_creacion__lte=fecha_fin)
+            cobranzas = cobranzas.filter(certificado__fecha_creacion__lt=fecha_fin + timedelta(days=1))
         except ValueError:
             pass
+            
+    # Ordena los resultados
+    cobranzas = cobranzas.order_by('-certificado__fecha_creacion') # Cambiado a fecha_creacion para consistencia
 
     filtros = {
         "cliente": cliente or "",
         "rut": rut or "",
-        "certificado": certificado or "",
+        "certificado": certificado_id if certificado_id is not None else "",
         "inicio": inicio or "",
         "fin": fin or "",
     }
@@ -782,6 +813,7 @@ def vista_cobranzas(request):
         'cobranzas': cobranzas,
         'filtros': filtros,
     })
+
 
 @login_required
 def generar_pdf_cobranza(request, certificado_id):
@@ -1962,3 +1994,85 @@ def test_email_view(request):
     except Exception as e:
         # Mensaje de error actualizado para reflejar Mailgun
         return HttpResponse(f"Error al enviar el correo con Mailgun: {e}", status=500)
+    
+
+class NsureTestView(View):
+    template_name = 'core/nsure_test.html'
+
+    def get(self, request, *args, **kwargs):
+        form = NsureTestForm()
+        context = {
+            'form': form,
+            'api_response': None,
+            'error_message': None,
+            'created_declaration_id': None, # Para mostrar el ID de la declaración creada
+        }
+        return render(request, self.template_name, context)
+
+    def post(self, request, *args, **kwargs):
+        form = NsureTestForm(request.POST)
+        api_response_data = None
+        error_message = None
+        created_declaration_id = None
+
+        if form.is_valid():
+            endpoint_choice = form.cleaned_data['endpoint']
+            search_term = form.cleaned_data['search_term']
+            declaration_id = form.cleaned_data['declaration_id']
+
+            try:
+                if endpoint_choice == 'create_declaration':
+                    # Genera un externalId único para cada declaración de prueba
+                    current_time_str = datetime.now().strftime('%Y%m%d%H%M%S%f')
+                    test_external_id = f"test_decl_{current_time_str}"
+                    
+                    # Llamar a la función para crear la declaración
+                    response = nsure_api.create_declaration(
+                        external_id=test_external_id, 
+                        departure_date=datetime.now() # O una fecha específica si lo requiere
+                    )
+                    api_response_data = response
+                    
+                    # Extraer el ID o externalId de la respuesta
+                    if response and 'externalId' in response:
+                        created_declaration_id = f"external-id={response['externalId']}"
+                    elif response and 'id' in response:
+                        created_declaration_id = str(response['id'])
+                    
+                    if not created_declaration_id:
+                        error_message = "Declaración creada, pero no se pudo extraer el ID de la respuesta."
+
+                elif endpoint_choice == 'vessels':
+                    if not declaration_id:
+                        error_message = "Debes proporcionar un ID de Declaración para buscar navíos."
+                    elif not search_term:
+                        error_message = "Debes proporcionar un término de búsqueda para buscar navíos."
+                    else:
+                        api_response_data = nsure_api.search_vessels(declaration_id, search_term)
+                        
+                elif endpoint_choice == 'countries':
+                    if not declaration_id:
+                        error_message = "Debes proporcionar un ID de Declaración para listar países."
+                    else:
+                        api_response_data = nsure_api.list_countries(declaration_id)
+                
+            except Exception as e:
+                # Captura el mensaje de error de la excepción
+                error_message = f"Error al comunicarse con la API de NSure Cargo: {e}"
+                # Si es un error HTTP, podrías intentar mostrar el cuerpo de la respuesta de error
+                if hasattr(e, 'response') and e.response is not None:
+                     error_message += f"\nDetalle: {e.response.text}"
+        else:
+            error_message = "Formulario inválido. Revisa los campos."
+            # Mostrar errores específicos del formulario
+            for field, errors in form.errors.items():
+                error_message += f"\nCampo '{field}': {', '.join(errors)}"
+
+
+        context = {
+            'form': form,
+            'api_response': json.dumps(api_response_data, indent=2) if api_response_data else None,
+            'error_message': error_message,
+            'created_declaration_id': created_declaration_id, # Pasa el ID al contexto
+        }
+        return render(request, self.template_name, context)

@@ -247,3 +247,21 @@ class NotasNumerosForm(forms.ModelForm):
         self.fields['referencia'].required = False
         self.fields['numero_factura'].required = False
         self.fields['notas'].required = False
+
+
+class NsureTestForm(forms.Form):
+    # Nuevo campo para el ID de la declaración
+    declaration_id = forms.CharField(
+        max_length=255, 
+        required=False, 
+        label="ID de Declaración (para Navíos/Países)",
+        help_text="Necesitas crear una declaración primero para obtener este ID. Puede ser un ID numérico o 'external-id=TU_ID_EXTERNO'."
+    )
+
+    ENDPOINT_CHOICES = [
+        ('create_declaration', '1. Crear Declaración de Prueba'), # Nueva opción
+        ('vessels', '2. Buscador de Navíos (5.4)'),
+        ('countries', '3. Listado de Países (5.6)'),
+    ]
+    endpoint = forms.ChoiceField(choices=ENDPOINT_CHOICES, label="Selecciona el Endpoint")
+    search_term = forms.CharField(max_length=255, required=False, label="Término de Búsqueda (para Navíos)")

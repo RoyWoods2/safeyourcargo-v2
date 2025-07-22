@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from .views import NsureTestView
 from django.contrib.auth.views import LogoutView
 urlpatterns = [
     path('', views.home_redirect, name='home'),
@@ -40,4 +41,4 @@ urlpatterns = [
     path('test-envio-certificado/', views.test_envio_certificado_real, name='test_envio_certificado'),
     path('test/api-puertos/', views.buscar_puertos_api_externa, name='buscar_puertos_api_externa'),
     path('test-email/', views.test_email_view, name='test_email'),
-    ]
+    path('nsure-test/', NsureTestView.as_view(), name='nsure_test'),    ]

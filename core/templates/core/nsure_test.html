@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NSure Cargo API Tester</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .container { max-width: 800px; margin: auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        form div { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { background-color: #4CAF50; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background-color: #45a049; }
+        pre { background-color: #f4f4f4; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+        .error { color: red; font-weight: bold; margin-top: 10px; }
+        .success { color: green; font-weight: bold; margin-top: 10px; }
+        .info { background-color: #e0f7fa; border-left: 5px solid #00bcd4; padding: 10px; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>NSure Cargo API Tester</h1>
+
+        <form method="post">
+            {% csrf_token %}
+            <div>
+                {{ form.endpoint.label_tag }}
+                {{ form.endpoint }}
+            </div>
+            <div>
+                {{ form.declaration_id.label_tag }}
+                {{ form.declaration_id }}
+                <small>{{ form.declaration_id.help_text }}</small>
+            </div>
+            <div>
+                {{ form.search_term.label_tag }}
+                {{ form.search_term }}
+                <small>Solo aplica si seleccionas "Buscador de Navíos".</small>
+            </div>
+            <button type="submit">Probar Endpoint</button>
+        </form>
+
+        {% if created_declaration_id %}
+            <div class="info">
+                <p><strong>¡Declaración de Prueba Creada!</strong></p>
+                <p>Copia este ID y pégalo en el campo "ID de Declaración" para probar los endpoints de Navíos o Países:</p>
+                <pre><code>{{ created_declaration_id }}</code></pre>
+            </div>
+        {% endif %}
+
+        {% if error_message %}
+            <p class="error">Error: {{ error_message }}</p>
+        {% elif api_response %}
+            <h2 class="success">Respuesta de la API:</h2>
+            <pre>{{ api_response }}</pre>
+        {% endif %}
+    </div>
+</body>
+</html>

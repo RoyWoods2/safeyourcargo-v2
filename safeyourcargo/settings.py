@@ -137,3 +137,12 @@ ANYMAIL = {
 DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', 'no-reply@safeyourcargo.com')
 SERVER_EMAIL = DEFAULT_FROM_EMAIL
 print(f"DEBUG: DEFAULT_FROM_EMAIL cargado: {DEFAULT_FROM_EMAIL}") # <--- AGREGAR ESTA LÍNEA TEMPORAL
+
+NSURE_API_HOME = 'https://igi.nsure.net/api/v1'
+NSURE_API_KEY = 'PqrED4vo2UI8I8TlPTgOKmCo0C1OuSUzbgbpIBHQwgnA2343xbtwqjhmGZ2bckvp'
+NSURE_USERNAME = 'jaimevalpo2020@gmail.com'
+NSURE_PASSWORD = 'Pollito2012'
+
+LOGIN_URL = 'login' 
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'

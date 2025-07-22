@@ -141,42 +141,23 @@
 
   </table>
 </div>
-{% endblock %}
-
-{% block extrajs %}
 
 
-<!-- DataTables después de jQuery -->
+
 <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css"/>
 
-<!-- Script personalizado al final -->
 <script>
-  $(document).ready(function () {
-    const table = $('#cobranzaTable').DataTable({
-      order: [[1, 'desc']],
-      language: {
-        url: '//cdn.datatables.net/plug-ins/1.13.6/i18n/es-CL.json'
-      }
-    });
-
-    // Filtros personalizados
-    $('#filtro-cliente').on('keyup change', function () {
-      table.column(2).search(this.value).draw();
-    });
-
-    $('#filtro-rut').on('keyup change', function () {
-      table.column(3).search(this.value).draw();
-    });
-
-    $('#filtro-certificado').on('keyup change', function () {
-      table.column(0).search(this.value).draw();
-    });
-
-    $('#filtro-referencia').on('keyup change', function () {
-      table.column(7).search(this.value).draw();
-    });
+$(document).ready(function () {
+  $('#cobranzaTable').DataTable({
+    order: [[1, 'desc']],
+    language: {
+      url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
+    },
+    searching: false
   });
-</script>
+});
 
+</script>
 
 {% endblock %}
