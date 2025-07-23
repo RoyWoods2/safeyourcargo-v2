@@ -444,7 +444,7 @@ def crear_certificado(request):
                     with transaction.atomic():
                         ruta = ruta_form.save()
                         metodo = metodo_form.save()
-                        mercancia = mercancia_form.save()
+                        mercancia = mercancia_form.save() # Guarda TipoMercancia primero
                         viaje = viaje_form.save(commit=False)
 
                         # Lógica para asignar FK de País
@@ -467,6 +467,7 @@ def crear_certificado(request):
                         certificado.viaje = viaje
                         certificado.notas = notas
                         certificado.creado_por = request.user
+                        # El cálculo de valor_prima_estimado se hace en el save() del CertificadoTransporte
                         certificado.save() # <-- Certificado guardado
 
                         registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
@@ -482,13 +483,13 @@ def crear_certificado(request):
                                 'direccion': certificado.cliente.direccion,
                                 'comuna': certificado.cliente.region or 'Por definir',
                                 'ciudad': certificado.cliente.ciudad,
-                                'valor_usd': certificado.valor_prima_estimado, # Usar valor_prima_estimado o el que corresponda
+                                'valor_usd': mercancia.valor_prima, # ✅ CORRECCIÓN CLAVE: Usar el valor_prima de TipoMercancia
                                 'fecha_emision': date.today(),
                                 'estado_emision': 'pendiente' # Inicializar como pendiente
                             }
                         )
                         # Si la factura ya existía (get_or_create), actualiza los valores
-                        factura.valor_usd = certificado.valor_prima_estimado # Asegura que el valor USD esté actualizado
+                        factura.valor_usd = mercancia.valor_prima # ✅ CORRECCIÓN CLAVE: Asegura que el valor USD esté actualizado desde TipoMercancia
                         
                         # Obtener el tipo de cambio del dólar antes de calcular el CLP
                         resultado_dolar = obtener_dolar_observado(settings.BCCH_USER, settings.BCCH_PASS) # Usar credenciales de settings
@@ -496,6 +497,18 @@ def crear_certificado(request):
 
                         factura.tipo_cambio = dolar
                         factura.valor_clp = (factura.valor_usd or Decimal('0.0')) * dolar
+                        
+                        # --- DEBUGGING DE MONTO ---
+                        print(f"\n--- DEBUG MONTO FACTURA ANTES DE EMISIÓN SII ---")
+                        print(f"DEBUG: mercancia.valor_prima (USD, desde formulario): {mercancia.valor_prima}")
+                        print(f"DEBUG: certificado.valor_prima_estimado (USD, calculado): {certificado.valor_prima_estimado}")
+                        print(f"DEBUG: Dólar (tipo_cambio): {dolar}")
+                        print(f"DEBUG: factura.valor_clp CALCULADO: {factura.valor_clp}")
+                        print(f"DEBUG: Tipo de factura.valor_clp: {type(factura.valor_clp)}")
+                        print(f"DEBUG: int(factura.valor_clp): {int(factura.valor_clp)}") # Lo que se enviará al XML
+                        print(f"--- FIN DEBUG MONTO ---")
+                        # --- FIN DEBUGGING ---
+
                         factura.save() # Guarda la factura local con los datos iniciales y valor_clp
 
                         # PASO 2: Asignar el folio SII y luego intentar emitir a facturacion.cl

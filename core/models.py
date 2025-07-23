@@ -226,6 +226,14 @@ class TipoMercancia(models.Model):
     
     def save(self, *args, **kwargs):
         self.monto_asegurado = self.calcular_monto_asegurado()
+        # --- DEBUGGING DE MONTO EN TipoMercancia ---
+        print(f"\n--- DEBUG MONTO EN TipoMercancia.save() ---")
+        print(f"DEBUG: TipoMercancia.valor_fca: {self.valor_fca}")
+        print(f"DEBUG: TipoMercancia.valor_flete: {self.valor_flete}")
+        print(f"DEBUG: TipoMercancia.monto_asegurado CALCULADO: {self.monto_asegurado}")
+        print(f"DEBUG: TipoMercancia.valor_prima ANTES DE GUARDAR: {self.valor_prima}")
+        print(f"--- FIN DEBUG MONTO EN TipoMercancia.save() ---")
+        # --- FIN DEBUGGING ---
         super().save(*args, **kwargs)
 
 class Viaje(models.Model):
@@ -346,3 +354,4 @@ class LogActividad(models.Model):
 
     def __str__(self):
         return f"{self.usuario.username} - {self.mensaje} - {self.fecha}"
+
