@@ -100,23 +100,21 @@
           </a>
         </td>
         <td>
-          <a href="{% url 'factura_pdf' cert.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Ver PDF Factura">
-            <i class="bi bi-file-earmark-pdf"></i>
-          </a>
-          {% if request.user.is_superuser and cert.factura %}
+       
   <div class="btn-group btn-group-sm mt-1">
     {% if cert.factura and cert.factura.url_pdf_sii %}
   <a href="{{ cert.factura.url_pdf_sii }}" target="_blank" class="btn btn-sm btn-outline-success mt-1" title="PDF Oficial SII (Timbrado)">
-    <i class="bi bi-patch-check-fill"></i> SII
+    <i class="bi bi-patch-check-fill"></i> Factura Timbrada
   </a>
 {% endif %}
+          {% if request.user.is_superuser and cert.factura %}
 
-    <a href="{% url 'descargar_factura_xml' cert.factura.id %}" class="btn btn-outline-primary" title="Descargar XML">
+    <a href="{% url 'descargar_factura_xml' cert.factura.id %}" class="btn btn-outline-primary mt-1" title="Descargar XML">
       <i class="bi bi-download"></i>
     </a>
 
     <button class="btn btn-outline-warning reenviar-xml-btn" data-id="{{ cert.factura.id }}" title="Reenviar a Facturacion.cl">
-      <i class="bi bi-arrow-repeat"></i>
+      <i class="bi bi-arrow-repeat mt-1"></i>
     </button>
   </div>
 {% endif %}
