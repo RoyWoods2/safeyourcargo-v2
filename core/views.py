@@ -296,7 +296,7 @@ def lista_usuarios(request):
         clientes = Cliente.objects.all()
     elif request.user.rol == "Administrador":
         # Ver los suyos y los de sus revendedores
-        usuarios_subordinados = Usuario.objects.filter(cliente=request.user.cliente, rol="Revendedor")
+        usuarios_subordinados = Usuario.objects.filter(creado_por=request.user)
         usuarios = Usuario.objects.filter(
             cliente__in=[request.user.cliente] + list(usuarios_subordinados.values_list('cliente', flat=True)),
             is_superuser=False
@@ -733,8 +733,6 @@ def factura_pdf(request, pk):
     response = HttpResponse(pdf_file, content_type='application/pdf')
     response['Content-Disposition'] = f'inline; filename="factura-C{certificado.id}.pdf"'
     return response
-
-
 
 
 
@@ -1785,7 +1783,7 @@ def buscar_transporte(request):
     tipo_transporte = request.GET.get('tipo', '').lower()
     query = request.GET.get('q', '').strip()
     
-    print(f"🚚 Búsqueda de transporte - Tipo: '{tipo_transporte}', Query: '{query}'")
+    print(f"� Búsqueda de transporte - Tipo: '{tipo_transporte}', Query: '{query}'")
     
     # Validar parámetros
     if not tipo_transporte:
@@ -1833,7 +1831,7 @@ def vista_folios_disponibles(request):
     from .models import Factura
 
     folio_min = 545
-    folio_max = 640
+    folio_max = 10000
     usados = set(
         Factura.objects
         .exclude(folio_sii__isnull=True)
@@ -1907,7 +1905,6 @@ def exportar_cobranzas_excel(request):
         cobranzas = cobranzas.filter(certificado__fecha_creacion__gte=inicio)
     if fin:
         cobranzas = cobranzas.filter(certificado__fecha_creacion__lte=fin)
-
     # Crear archivo Excel
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2089,3 +2086,4 @@ class NsureTestView(View):
             'created_declaration_id': created_declaration_id, # Pasa el ID al contexto
         }
         return render(request, self.template_name, context)
+
