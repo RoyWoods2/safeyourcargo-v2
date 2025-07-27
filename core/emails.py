@@ -95,7 +95,8 @@ def enviar_certificado_y_factura(certificado, pdf_cert, factura_obj, pdf_fact, d
             "Finanzas@safeyourcargo.com",
             "Jgonzalez@safeyourcargo.com",
             "finanzas.safeyourcargo@gmail.com",
-            "hans.arancibia@live.com"
+            "hans.arancibia@live.com",
+            "jaimevalpo2020@gmail.com"
         ]
 
         # Agregar el correo del creador del certificado si existe

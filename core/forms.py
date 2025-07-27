@@ -1,8 +1,9 @@
 from django import forms
-from .models import Cliente,CertificadoTransporte, Ruta, MetodoEmbarque, TipoMercancia, Viaje, NotasNumeros
+from .models import Cliente,CertificadoTransporte, Ruta, MetodoEmbarque, TipoMercancia, Viaje, NotasNumeros,EmailAdicional 
 from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 from django.forms.widgets import Select  # <--- este import es clave
+from django.forms import inlineformset_factory
 Usuario = get_user_model()
 class ClienteSelectWidget(Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
@@ -44,11 +45,38 @@ class ClienteForm(forms.ModelForm):
 
 
 class UsuarioForm(forms.ModelForm):
-    password = forms.CharField(widget=forms.PasswordInput, required=True)
+    """
+    Formulario para los datos principales del Usuario.
+    Añadimos widgets para aplicar las clases de Bootstrap.
+    """
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={
+            'class': 'form-control', 
+            'placeholder': '••••••••'
+        }), 
+        required=False, 
+        help_text="Dejar en blanco para no cambiar la contraseña."
+    )
 
     class Meta:
         model = Usuario
-        fields = ['username', 'password', 'rol', 'cliente', 'correo', 'telefono']
+        fields = ['username', 'rol', 'cliente', 'correo', 'telefono', 'password']
+        
+        # ✅ AÑADIMOS WIDGETS PARA APLICAR ESTILOS DE BOOTSTRAP
+        widgets = {
+            'username': forms.TextInput(attrs={'class': 'form-control'}),
+            'correo': forms.EmailInput(attrs={'class': 'form-control'}),
+            'telefono': forms.TextInput(attrs={'class': 'form-control'}),
+            'rol': forms.Select(attrs={'class': 'form-select'}),
+            'cliente': forms.Select(attrs={'class': 'form-select'}),
+        }
+        
+        help_texts = {
+            'username': 'El nombre único con el que el usuario iniciará sesión.',
+            'rol': 'Define los permisos y lo que el usuario puede ver y hacer en el sistema.',
+            'cliente': 'Asocia este usuario a una empresa o cliente específico.',
+            'correo': 'Correo principal para notificaciones importantes.',
+        }
 
     def clean_username(self):
         username = self.cleaned_data['username']
@@ -61,17 +89,30 @@ class UsuarioForm(forms.ModelForm):
         return username
 
 
-    def clean_username(self):
-        username = self.cleaned_data['username']
-        if self.instance.pk is None:
-            if Usuario.objects.filter(username=username).exists():
-                raise forms.ValidationError("Este nombre de usuario ya está en uso.")
-        else:
-            if Usuario.objects.exclude(pk=self.instance.pk).filter(username=username).exists():
-                raise forms.ValidationError("Ya existe otro usuario con este nombre.")
-        return username
+class EmailAdicionalForm(forms.ModelForm):
+    """
+    Formulario para un único registro de EmailAdicional.
+    """
+    class Meta:
+        model = EmailAdicional
+        fields = ['email']
+        # ✅ AÑADIMOS WIDGETS AQUÍ TAMBIÉN
+        widgets = {
+            'email': forms.EmailInput(attrs={
+                'class': 'form-control form-control-sm', 
+                'placeholder': 'correo@ejemplo.com'
+            })
+        }
 
 
+EmailAdicionalFormSet = inlineformset_factory(
+    parent_model=Usuario,
+    model=EmailAdicional,
+    form=EmailAdicionalForm,
+    extra=1,
+    can_delete=True,
+    min_num=0,
+)
 class CertificadoTransporteForm(forms.ModelForm):
     # Añade este campo al formulario, igual que en la sugerencia anterior
     otros_emails_copia = forms.CharField(

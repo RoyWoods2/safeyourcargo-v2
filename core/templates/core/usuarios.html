@@ -61,51 +61,51 @@
                 <th>USERNAME</th>
                 <th>ROL</th>
                 <th>CLIENTE</th>
-    {% if request.user.is_superuser or request.user.rol == "Administrador" %}
-    <th>ACCIONES</th>
-    {% endif %}
+                {% if request.user.is_superuser or request.user.rol == "Administrador" %}
+                <th>ACCIONES</th>
+                {% endif %}
               </tr>
             </thead>
             <tbody>
-{% for usuario in usuarios %}
-<tr>
-  <td>
-    <span class="badge {% if usuario.is_active %}bg-success{% else %}bg-danger{% endif %} estado-label">
-      {% if usuario.is_active %}Activo{% else %}Inactivo{% endif %}
-    </span>
-  </td>
-  <td>{{ usuario.username }}</td>
-  <td>{{ usuario.rol }}</td>
-  <td>{{ usuario.cliente.nombre }}</td>
-  {% if request.user.is_superuser or request.user.rol == "Administrador" %}
-  <td>
-    <button type="button" class="btn btn-outline-secondary btn-sm mt-1 editar-usuario"
-            data-id="{{ usuario.id }}"
-            data-username="{{ usuario.username }}"
-            data-rol="{{ usuario.rol }}"
-            data-cliente="{{ usuario.cliente.id }}">
-      Editar
-    </button>
+              {% for usuario in usuarios %}
+              <tr>
+                <td>
+                  <span class="badge {% if usuario.is_active %}bg-success{% else %}bg-danger{% endif %} estado-label">
+                    {% if usuario.is_active %}Activo{% else %}Inactivo{% endif %}
+                  </span>
+                </td>
+                <td>{{ usuario.username }}</td>
+                <td>{{ usuario.rol }}</td>
+                <td>{{ usuario.cliente.nombre|default:"N/A" }}</td>
+                {% if request.user.is_superuser or request.user.rol == "Administrador" %}
+<td>
+  <button type="button" class="btn btn-outline-secondary btn-sm mt-1"
+          data-bs-toggle="modal" 
+          data-bs-target="#modal-usuario"
+          data-id="{{ usuario.id }}">
+    Editar
+  </button>
 
-    <button type="button"
-            class="btn btn-outline-secondary btn-sm mt-1 toggle-estado-btn"
-            data-id="{{ usuario.id }}"
-            data-estado="{{ usuario.is_active }}"
-            data-correo="{{ usuario.correo }}"
-            data-telefono="{{ usuario.telefono }}">
-      {% if usuario.is_active %}Desactivar{% else %}Activar{% endif %}
-    </button>
-  </td>
-  {% endif %}
-</tr>
-{% empty %}
-<tr>
-  <td colspan="5" class="text-center text-muted">No hay usuarios registrados aún.</td>
-</tr>
-{% endfor %}
-</tbody>
-
-
+  <button type="button"
+          class="btn btn-outline-secondary btn-sm mt-1 toggle-estado-btn"
+          data-id="{{ usuario.id }}">
+    {% if usuario.is_active %}Desactivar{% else %}Activar{% endif %}
+  </button>
+  
+  <button type="button" 
+          class="btn btn-outline-danger btn-sm mt-1 eliminar-usuario" 
+          data-id="{{ usuario.id }}">
+    Eliminar
+  </button>
+</td>
+                {% endif %}
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center text-muted">No hay usuarios registrados aún.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
           </table>
         </div>
       </div>
@@ -116,151 +116,162 @@
 {% include 'core/modal_crear_usuario.html' %}
 
 <script>
-document.addEventListener("DOMContentLoaded", function () {
-  const tabla = document.getElementById("tabla-usuarios");
-
-  // ELIMINAR USUARIO
-  tabla.querySelectorAll(".eliminar-usuario").forEach(button => {
-    button.addEventListener("click", function () {
-      const userId = this.dataset.id;
-      const csrftoken = getCookie("csrftoken");
-
-      if (!userId) {
-        alert("ID de usuario no válido.");
-        return;
-      }
-
-      if (confirm("¿Estás seguro de eliminar este usuario?")) {
-        fetch(`/usuarios/eliminar/${userId}/`, {
-          method: "POST",
-          headers: {
-            "X-CSRFToken": csrftoken,
-            "X-Requested-With": "XMLHttpRequest",
-            "Accept": "application/json"
-          }
-        })
-        .then(res => {
-          if (!res.ok) throw new Error("Error HTTP " + res.status);
-          return res.json();
-        })
-        .then(data => {
-          if (data.success) {
-            alert("Usuario eliminado.");
-            location.reload();
-          } else {
-            alert(data.error || "No se pudo eliminar el usuario.");
-          }
-        })
-        .catch(err => {
-          console.error("Error al eliminar:", err);
-          alert("Error inesperado.");
-        });
-      }
-    });
-  });
-
-  // EDITAR USUARIO
-tabla.querySelectorAll(".editar-usuario").forEach(button => {
-  button.addEventListener("click", function () {
-    const usuarioId = this.dataset.id;
-    const username = this.dataset.username;
-    const rol = this.dataset.rol;  // ← ahora sí está definida
-    const clienteId = this.dataset.cliente;
-
-    cargarOpcionesRol(rol);  // ← ya no lanzará error
-
-    document.getElementById("usuario_id").value = usuarioId;
-    document.getElementById("username").value = username;
-    document.getElementById("password").value = "";
-    document.getElementById("cliente").value = clienteId;
-
-    document.getElementById("modalUsuarioLabel").textContent = "Editar Usuario";
-    new bootstrap.Modal(document.getElementById("modal-usuario")).show();
-  });
-});
-
-
-  // CSRF
-  function getCookie(name) {
-    let cookieValue = null;
-    if (document.cookie && document.cookie !== '') {
-      const cookies = document.cookie.split(';');
-      for (let cookie of cookies) {
-        cookie = cookie.trim();
-        if (cookie.startsWith(name + '=')) {
-          cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-          break;
-        }
+// --- FUNCIONES AUXILIARES ---
+function getCookie(name) {
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + '=')) {
+        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+        break;
       }
     }
-    return cookieValue;
   }
+  return cookieValue;
+}
 
-  tabla.querySelectorAll(".toggle-estado-btn").forEach(button => {
-    button.addEventListener("click", function () {
-      const userId = this.dataset.id;
-      const csrftoken = getCookie("csrftoken");
-      const row = this.closest("tr");
-      const badge = row.querySelector(".estado-label");
-
-      fetch(`/usuarios/toggle-estado/${userId}/`, {
-        method: "POST",
-        headers: {
-          "X-CSRFToken": csrftoken,
-          "X-Requested-With": "XMLHttpRequest"
-        }
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) {
-          if (data.estado) {
-            badge.classList.remove("bg-danger");
-            badge.classList.add("bg-success");
-            badge.textContent = "Activo";
-            this.textContent = "Desactivar";
-          } else {
-            badge.classList.remove("bg-success");
-            badge.classList.add("bg-danger");
-            badge.textContent = "Inactivo";
-            this.textContent = "Activar";
-          }
-        } else {
-          alert("No se pudo cambiar el estado.");
-        }
-      })
-      .catch(err => {
-        console.error("Error al cambiar estado:", err);
-        alert("Error inesperado.");
-      });
-    });
-  });
-
-});
-function cargarOpcionesRol(rolActual) {
-  const rolSelect = document.getElementById("role");
-  if (!rolSelect) return;
-
-  rolSelect.innerHTML = "";  // Limpia
-
-  const usuarioActualRol = "{{ rol_actual }}";
-
-  let opciones = [];
-  if (usuarioActualRol === "Superusuario") {
-    opciones = ["Usuario", "Administrador", "Revendedor"];
+function togglePassword() {
+  const input = document.getElementById("password");
+  const icon = document.getElementById("toggleIcon");
+  if (!input || !icon) return;
+  if (input.type === "password") {
+    input.type = "text";
+    icon.classList.replace("bi-eye", "bi-eye-slash");
   } else {
-    opciones = ["Revendedor"];
+    input.type = "password";
+    icon.classList.replace("bi-eye-slash", "bi-eye");
   }
+}
 
-  opciones.forEach(opcion => {
-    const opt = document.createElement("option");
-    opt.value = opcion;
-    opt.textContent = opcion;
-    if (opcion === rolActual) {
-      opt.selected = true;
+function initializeFormsetLogic() {
+  const formContainer = document.querySelector('#form-usuario-container');
+  if (!formContainer) return;
+
+  formContainer.addEventListener('click', function(event) {
+    // Busca el botón por su ID o una clase específica para evitar conflictos
+    const addButton = event.target.closest('#add-email-form');
+    if (addButton) {
+      const formsetContainer = document.getElementById('email-formset-container');
+      const totalFormsInput = document.getElementById('id_emails-TOTAL_FORMS');
+      const emptyFormTemplate = document.getElementById('empty-form-template');
+      if (!formsetContainer || !totalFormsInput || !emptyFormTemplate) return;
+
+      const formIndex = parseInt(totalFormsInput.value);
+      const newFormHtml = emptyFormTemplate.innerHTML.replace(/__prefix__/g, formIndex);
+      formsetContainer.insertAdjacentHTML('beforeend', newFormHtml);
+      totalFormsInput.value = formIndex + 1;
     }
-    rolSelect.appendChild(opt);
   });
 }
-</script>
 
+
+// --- LÓGICA PRINCIPAL ---
+document.addEventListener("DOMContentLoaded", function () {
+    const modalEl = document.getElementById('modal-usuario');
+    const tabla = document.getElementById("tabla-usuarios");
+
+    // 1. Cargar el formulario en el modal al abrirlo
+    modalEl.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const userId = button.dataset.id || null;
+        const modalTitle = modalEl.querySelector('.modal-title');
+        const formContainer = modalEl.querySelector('#form-usuario-container');
+        const url = userId ? `/usuarios/get-form/${userId}/` : `/usuarios/get-form/`;
+
+        modalTitle.textContent = userId ? 'Editar Usuario' : 'Crear Nuevo Usuario';
+        formContainer.innerHTML = `<div class="text-center p-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Cargando...</span></div></div>`;
+
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                formContainer.innerHTML = html;
+                initializeFormsetLogic(); // Activa la lógica para el botón "Añadir email"
+            })
+            .catch(error => {
+                formContainer.innerHTML = `<div class="alert alert-danger">Error al cargar el formulario.</div>`;
+                console.error('Error fetching form:', error);
+            });
+    });
+
+    // 2. Guardar el formulario al hacer clic en "Guardar"
+    document.getElementById('btn-guardar-usuario').addEventListener('click', function() {
+        const form = document.getElementById('form-usuario');
+        if (!form) return alert("Error: No se encuentra el formulario para enviar.");
+        
+        const formData = new FormData(form);
+        fetch(form.action, {
+            method: "POST",
+            headers: { "X-CSRFToken": getCookie("csrftoken"), "X-Requested-With": "XMLHttpRequest" },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                alert("Usuario guardado correctamente.");
+                location.reload();
+            } else if (data.errors) {
+                let errorMsg = "Por favor, corrige los siguientes errores:\n\n";
+                const errors = JSON.parse(data.errors);
+                for (const field in errors) {
+                    if (field === 'formset') {
+                        errors[field].forEach((formErrors, index) => {
+                            for (const emailField in formErrors) { errorMsg += `- Email Adicional ${index + 1}: ${formErrors[emailField][0]}\n`; }
+                        });
+                    } else { errorMsg += `- ${field}: ${errors[field][0].message || errors[field][0]}\n`; }
+                }
+                alert(errorMsg);
+            } else { alert("Ocurrió un error desconocido."); }
+        })
+        .catch(error => {
+            console.error("Error al enviar el formulario:", error);
+            alert("Ocurrió un error inesperado. Revisa la consola.");
+        });
+    });
+
+    // 3. Acciones en la tabla (Activar/Desactivar, Eliminar)
+    tabla.addEventListener('click', function(event) {
+        const target = event.target;
+        const csrftoken = getCookie("csrftoken");
+        
+        // --- Cambiar estado (Activar/Desactivar) ---
+        if (target.classList.contains('toggle-estado-btn')) {
+            const userId = target.dataset.id;
+            const badge = target.closest("tr").querySelector(".estado-label");
+            fetch(`/usuarios/toggle-estado/${userId}/`, {
+                method: "POST",
+                headers: { "X-CSRFToken": csrftoken, "X-Requested-With": "XMLHttpRequest" }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    badge.classList.toggle("bg-danger", !data.estado);
+                    badge.classList.toggle("bg-success", data.estado);
+                    badge.textContent = data.estado ? "Activo" : "Inactivo";
+                    target.textContent = data.estado ? "Desactivar" : "Activar";
+                } else { alert("No se pudo cambiar el estado."); }
+            });
+        }
+
+        // --- Eliminar Usuario ---
+        if (target.classList.contains('eliminar-usuario')) {
+            const userId = target.dataset.id;
+            if (confirm("¿Estás seguro de que quieres eliminar este usuario?")) {
+                fetch(`/usuarios/eliminar/${userId}/`, {
+                    method: "POST",
+                    headers: { "X-CSRFToken": csrftoken, "X-Requested-With": "XMLHttpRequest" }
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        alert("Usuario eliminado.");
+                        location.reload();
+                    } else { alert(data.error || "No se pudo eliminar."); }
+                });
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

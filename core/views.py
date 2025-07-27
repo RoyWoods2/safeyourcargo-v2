@@ -289,33 +289,44 @@ def obtener_ciudades(request):
 
 
 
+
 @login_required
 def lista_usuarios(request):
+    # ❗️ Esta vista ahora es más simple. Solo necesita pasar los usuarios a la plantilla.
+    # La lógica del modal (formularios, clientes, roles) se moverá a get_form_usuario.
     if request.user.is_superuser:
         usuarios = Usuario.objects.filter(is_superuser=False).select_related('cliente')
-        clientes = Cliente.objects.all()
     elif request.user.rol == "Administrador":
-        # Ver los suyos y los de sus revendedores
         usuarios_subordinados = Usuario.objects.filter(creado_por=request.user)
+        # CORRECCIÓN: Filtrar por `creado_por` es más preciso que por cliente para la jerarquía.
         usuarios = Usuario.objects.filter(
-            cliente__in=[request.user.cliente] + list(usuarios_subordinados.values_list('cliente', flat=True)),
-            is_superuser=False
-        ).select_related('cliente')
-        clientes = Cliente.objects.filter(id__in=[request.user.cliente.id] + list(usuarios_subordinados.values_list('cliente', flat=True)))
-    elif request.user.rol == "Revendedor":
-        # 🔹 Solo ve usuarios que él creó
-        usuarios = Usuario.objects.filter(cliente=request.user.cliente, is_superuser=False).select_related('cliente')
-        clientes = Cliente.objects.filter(id=request.user.cliente.id)
-    else:
-        usuarios = Usuario.objects.none()
-        clientes = Cliente.objects.none()
+            Q(creado_por=request.user) | Q(creado_por__in=usuarios_subordinados) | Q(pk=request.user.pk)
+        ).distinct().select_related('cliente')
+    else: # Revendedor y Usuario
+        usuarios = Usuario.objects.filter(creado_por=request.user).select_related('cliente')
 
-    rol_actual = "Superusuario" if request.user.is_superuser else request.user.rol
+    return render(request, 'core/usuarios.html', {'usuarios': usuarios})
 
-    return render(request, 'core/usuarios.html', {
-        'usuarios': usuarios,
-        'clientes': clientes,
-        'rol_actual': rol_actual,
+@login_required
+def get_form_usuario(request, user_id=None):
+    """
+    Devuelve el HTML del formulario para crear o editar un usuario.
+    Esta vista es llamada por AJAX desde el modal.
+    """
+    instance = None
+    if user_id:
+        # Se asegura de que el usuario que edita tenga permisos sobre el editado
+        instance = get_object_or_404(Usuario, pk=user_id)
+        # Aquí puedes añadir una capa extra de seguridad para verificar permisos
+        # Por ejemplo, un superusuario puede editar a todos, un admin a sus sub-usuarios, etc.
+
+    form = UsuarioForm(instance=instance)
+    formset = EmailAdicionalFormSet(instance=instance, prefix='emails')
+
+    # Debes crear esta plantilla parcial
+    return render(request, 'core/_form_usuario_content.html', {
+        'form': form,
+        'email_formset': formset
     })
 
 
@@ -326,46 +337,51 @@ def form_usuario(request):
         return HttpResponseBadRequest("Solo se acepta AJAX aquí")
 
     usuario_id = request.POST.get("usuario_id")
-    username = request.POST.get("username")
-    password = request.POST.get("password")
-    rol = request.POST.get("rol")
-    cliente_id = request.POST.get("cliente")
-    correo = request.POST.get("correo", "").strip()
-    telefono = request.POST.get("telefono", "").strip()
-
+    instance = None
     if usuario_id:
-        # Edición
-        usuario = get_object_or_404(Usuario, pk=usuario_id)
-        usuario.username = username
-        usuario.correo = correo
-        usuario.telefono = telefono
-        if password:
-            usuario.set_password(password)
+        instance = get_object_or_404(Usuario, pk=usuario_id)
+
+    form = UsuarioForm(request.POST, instance=instance)
+    formset = EmailAdicionalFormSet(request.POST, instance=instance, prefix='emails')
+
+    if form.is_valid() and formset.is_valid():
+        try:
+            with transaction.atomic():
+                # Guarda el formulario principal del usuario
+                usuario = form.save(commit=False)
+                
+                # Asigna la contraseña solo si se proporcionó una nueva
+                password = form.cleaned_data.get('password')
+                if password:
+                    usuario.set_password(password)
+                
+                # Si es un usuario nuevo, asigna el creador
+                if not instance:
+                    usuario.creado_por = request.user
+                
+                usuario.save()
+
+                # Asocia el formset con la instancia del usuario recién guardada y guarda
+                formset.instance = usuario
+                formset.save()
+
+            registrar_actividad(request.user, f"Guardó datos del usuario: {usuario.username}")
+            return JsonResponse({'success': True})
+            
+        except Exception as e:
+            # Captura errores inesperados durante la transacción
+            logger.error(f"Error en transacción al guardar usuario: {e}", exc_info=True)
+            return JsonResponse({'success': False, 'errors': json.dumps({'__all__': [f"Error inesperado: {str(e)}"]})}, status=400)
     else:
-        # Creación
-        usuario = Usuario(
-            username=username,
-            correo=correo,
-            telefono=telefono
-        )
-        usuario.set_password(password or "123456")  # Contraseña por defecto
+        # Combina errores del formulario principal y del formset
+        errors = form.errors.as_data()
+        if formset.errors:
+            # Añade los errores del formset a la lista para el frontend
+            errors['formset'] = formset.errors
+        
+        # Convertimos a JSON para que el frontend lo pueda procesar
+        return JsonResponse({'success': False, 'errors': json.dumps(errors, cls=json.JSONEncoder)}, status=400)
 
-    # Asignación de rol con control por permisos
-    if request.user.is_superuser:
-        usuario.rol = rol
-    elif request.user.rol == "Administrador":
-        usuario.rol = "Revendedor"
-    elif request.user.rol == "Revendedor":
-        usuario.rol = "Usuario"
-    else:
-        return JsonResponse({'success': False, 'error': 'No tienes permiso para crear usuarios.'}, status=403)
-
-    usuario.is_active = True
-    usuario.pendiente_aprobacion = False
-    usuario.cliente_id = cliente_id
-    usuario.save()
-
-    return JsonResponse({'success': True})
 
 @user_passes_test(lambda u: u.is_superuser)
 def aprobar_usuario(request, user_id):
@@ -444,7 +460,7 @@ def crear_certificado(request):
                     with transaction.atomic():
                         ruta = ruta_form.save()
                         metodo = metodo_form.save()
-                        mercancia = mercancia_form.save() # Guarda TipoMercancia primero
+                        mercancia = mercancia_form.save()
                         viaje = viaje_form.save(commit=False)
 
                         # Lógica para asignar FK de País
@@ -467,114 +483,91 @@ def crear_certificado(request):
                         certificado.viaje = viaje
                         certificado.notas = notas
                         certificado.creado_por = request.user
-                        # El cálculo de valor_prima_estimado se hace en el save() del CertificadoTransporte
-                        certificado.save() # <-- Certificado guardado
+                        certificado.save()
 
                         registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
                         
                         # --- Generación y emisión de factura ---
-                        # PASO 1: Crear la factura localmente (sin el folio SII ni URL aún)
                         factura, created = Factura.objects.get_or_create(
                             certificado=certificado,
                             defaults={
-                                'numero': Factura.objects.aggregate(max_num=models.Max('numero'))['max_num'] + 1 if Factura.objects.exists() else 1, # Lógica para numero interno
+                                'numero': Factura.objects.aggregate(max_num=models.Max('numero'))['max_num'] + 1 if Factura.objects.exists() else 1,
                                 'razon_social': certificado.cliente.nombre,
                                 'rut': certificado.cliente.rut,
                                 'direccion': certificado.cliente.direccion,
                                 'comuna': certificado.cliente.region or 'Por definir',
                                 'ciudad': certificado.cliente.ciudad,
-                                'valor_usd': mercancia.valor_prima, # ✅ CORRECCIÓN CLAVE: Usar el valor_prima de TipoMercancia
+                                'valor_usd': mercancia.valor_prima,
                                 'fecha_emision': date.today(),
-                                'estado_emision': 'pendiente' # Inicializar como pendiente
+                                'estado_emision': 'pendiente'
                             }
                         )
-                        # Si la factura ya existía (get_or_create), actualiza los valores
-                        factura.valor_usd = mercancia.valor_prima # ✅ CORRECCIÓN CLAVE: Asegura que el valor USD esté actualizado desde TipoMercancia
+                        factura.valor_usd = mercancia.valor_prima
                         
-                        # Obtener el tipo de cambio del dólar antes de calcular el CLP
-                        resultado_dolar = obtener_dolar_observado(settings.BCCH_USER, settings.BCCH_PASS) # Usar credenciales de settings
-                        dolar = Decimal(resultado_dolar.get("valor", '950.00')) # Valor por defecto si falla la API
+                        resultado_dolar = obtener_dolar_observado(settings.BCCH_USER, settings.BCCH_PASS)
+                        dolar = Decimal(resultado_dolar.get("valor", '950.00'))
 
                         factura.tipo_cambio = dolar
                         factura.valor_clp = (factura.valor_usd or Decimal('0.0')) * dolar
-                        
-                        # --- DEBUGGING DE MONTO ---
-                        print(f"\n--- DEBUG MONTO FACTURA ANTES DE EMISIÓN SII ---")
-                        print(f"DEBUG: mercancia.valor_prima (USD, desde formulario): {mercancia.valor_prima}")
-                        print(f"DEBUG: certificado.valor_prima_estimado (USD, calculado): {certificado.valor_prima_estimado}")
-                        print(f"DEBUG: Dólar (tipo_cambio): {dolar}")
-                        print(f"DEBUG: factura.valor_clp CALCULADO: {factura.valor_clp}")
-                        print(f"DEBUG: Tipo de factura.valor_clp: {type(factura.valor_clp)}")
-                        print(f"DEBUG: int(factura.valor_clp): {int(factura.valor_clp)}") # Lo que se enviará al XML
-                        print(f"--- FIN DEBUG MONTO ---")
-                        # --- FIN DEBUGGING ---
+                        factura.save()
 
-                        factura.save() # Guarda la factura local con los datos iniciales y valor_clp
+                        from .models import obtener_siguiente_folio
+                        factura.folio_sii = obtener_siguiente_folio()
+                        factura.save()
 
-                        # PASO 2: Asignar el folio SII y luego intentar emitir a facturacion.cl
-                        from .models import obtener_siguiente_folio # Importar aquí para evitar circular dependency
-                        factura.folio_sii = obtener_siguiente_folio() # <--- AÑADIDO: Asigna el folio antes de la emisión
-                        factura.save() # <--- AÑADIDO: Guarda la factura con el folio asignado
-
-                        # Llamar al servicio externo con el objeto 'factura'
                         response_facturacion = emitir_factura_exenta_cl_xml(factura)
                         
-                        # PASO 3: Procesar la respuesta de facturacion.cl
                         if response_facturacion and response_facturacion.get('success'):
-                            # Los campos folio_sii y url_pdf_sii ya deberían haber sido actualizados dentro de emitir_factura_exenta_cl_xml
-                            # pero los volvemos a asignar aquí para asegurar consistencia y para el log/mensaje.
-                            factura.folio_sii = response_facturacion.get('folio_sii') # <-- Guarda el folio OFICIAL
-                            factura.url_pdf_sii = response_facturacion.get('url_pdf_sii') # <-- Guarda la URL OFICIAL
-                            factura.estado_emision = 'exito' # Actualizar estado
+                            factura.folio_sii = response_facturacion.get('folio_sii')
+                            factura.url_pdf_sii = response_facturacion.get('url_pdf_sii')
+                            factura.estado_emision = 'exito'
                             messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
                             logger.info(f"Factura {factura.id} emitida con Folio SII: {factura.folio_sii}, URL: {factura.url_pdf_sii}")
                         else:
                             error_detalle = response_facturacion.get('error', 'Error desconocido al emitir a facturacion.cl')
-                            factura.estado_emision = 'fallida' # Marcar como fallida
-                            factura.observaciones = f"Error al emitir DTE: {error_detalle}" # Registrar el error
+                            factura.estado_emision = 'fallida'
+                            factura.observaciones = f"Error al emitir DTE: {error_detalle}"
                             messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
                             logger.error(f"Error al emitir factura {factura.id} a facturacion.cl: {error_detalle}")
-                            # Opcional: Si este error es crítico y quieres que la transacción falle, puedes lanzar una excepción.
-                            # raise Exception(f"Fallo crítico en emisión DTE: {error_detalle}")
                         
-                        factura.save() # Guardar los datos de emisión del SII (folio, URL, estado)
+                        factura.save()
 
                         # --- Lógica de Envío de Correos (DESPUÉS de intentar emitir al SII) ---
                         try:
-                            # Obtener los PDFs usando tus funciones de utilidad de utils_pdf.py
-                            # Estas funciones devuelven objetos BytesIO
                             certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
-                            
-                            # Generar el PDF de la factura. Asegúrate que generar_pdf_factura reciba el certificado y request
-                            # Si generar_pdf_factura necesita el objeto 'factura' en lugar de 'certificado',
-                            # deberías cambiar la firma de esa función o pasarle factura directamente.
-                            # Por como está definida, actualmente espera 'certificado'.
                             factura_pdf_buffer = generar_pdf_factura(certificado, request) 
 
-                            # Obtener los emails adicionales del formulario
-                            otros_emails_str = cert_form.cleaned_data.get('otros_emails_copia')
+                            # ✅ --- LÓGICA DE EMAILS ACTUALIZADA --- ✅
+                            # 1. Obtener emails escritos manualmente en el formulario.
+                            otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '')
+                            emails_manuales = [e.strip() for e in (otros_emails_manuales_str or '').split(',') if e.strip()]
+
+                            # 2. Obtener emails guardados en el perfil del usuario que crea el certificado.
+                            emails_guardados_usuario = request.user.get_lista_emails_adicionales()
                             
-                            # Llamar a tu función de email unificada de core.emails.py
+                            # 3. Combinar ambas listas y eliminar duplicados para no enviar el mismo correo dos veces.
+                            todos_los_destinatarios_extra = list(set(emails_manuales + emails_guardados_usuario))
+                            # ✅ --- FIN DE LA LÓGICA ACTUALIZADA --- ✅
+                            
                             enviar_certificado_y_factura(
                                 certificado=certificado,
-                                pdf_cert=certificado_pdf_buffer, # Pasa el BytesIO del certificado
+                                pdf_cert=certificado_pdf_buffer,
                                 factura_obj=factura,
-                                pdf_fact=factura_pdf_buffer, # Pasa el objeto factura completo
-                                destinatarios_extra=[e.strip() for e in (otros_emails_str or '').split(',') if e.strip()]
+                                pdf_fact=factura_pdf_buffer,
+                                # 4. Se pasa la lista combinada a la función de envío.
+                                destinatarios_extra=todos_los_destinatarios_extra
                             )
                             logger.info(f"Proceso de envío de correo para certificado C-{certificado.id} iniciado.")
 
                         except Exception as e:
                             logger.error(f"Error general en el proceso de envío de correo para el certificado C-{certificado.id}: {e}", exc_info=True)
                             messages.warning(request, "El certificado se creó y la factura se procesó, pero hubo un problema al enviar la notificación por correo.")
-                        # --- Fin Lógica de Envío de Correos ---
                         
-                        # Respuesta para AJAX
                         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                             return JsonResponse({
                                 'success': True,
                                 'factura_emitida': response_facturacion.get("success", False),
-                                'resultado': response_facturacion # Retorna la respuesta completa del servicio
+                                'resultado': response_facturacion
                             })
 
                         return redirect('crear_certificado')
@@ -584,9 +577,8 @@ def crear_certificado(request):
                     messages.error(request, f"Error al generar el certificado o la factura: {e}")
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return JsonResponse({'success': False, 'errors': {'__all__': [str(e)]}}, status=400)
-                    return redirect('crear_certificado') # Fallback para no-AJAX
+                    return redirect('crear_certificado')
 
-        # Si los formularios no son válidos
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             errors = {form_name: form_instance.errors for form_name, form_instance in forms_to_validate.items() if not form_instance.is_valid()}
             logger.error(f"Errores de validación de formulario: {errors}")
@@ -595,7 +587,7 @@ def crear_certificado(request):
                 'errors': errors
             }, status=400)
 
-    # GET - Filtros y formularios iniciales
+    # El resto de la vista (lógica GET) se mantiene igual...
     fecha_inicio = request.GET.get('inicio')
     fecha_fin = request.GET.get('fin')
     busqueda = request.GET.get('q', '').strip()
@@ -644,8 +636,6 @@ def crear_certificado(request):
     }
 
     return render(request, 'certificados/crear_certificado.html', context)
-
-
 
 
 @login_required

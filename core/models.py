@@ -20,7 +20,28 @@ class Usuario(AbstractUser):
     def __str__(self):
         return f"{self.username} - {self.rol}"
 
-    
+    def get_lista_emails_adicionales(self):
+        """Devuelve una lista de los correos adicionales asociados."""
+        # Accede a los correos a través de la relación inversa 'emails_adicionales'
+        return list(self.emails_adicionales.values_list('email', flat=True))
+
+# ✅ NUEVO MODELO AÑADIDO
+class EmailAdicional(models.Model):
+    usuario = models.ForeignKey(
+        Usuario, 
+        on_delete=models.CASCADE, 
+        related_name='emails_adicionales' # Nombre clave para la relación inversa
+    )
+    email = models.EmailField(verbose_name="Correo electrónico adicional")
+
+    class Meta:
+        verbose_name = "Email Adicional"
+        verbose_name_plural = "Emails Adicionales"
+        # Evita que se pueda añadir el mismo email varias veces para el mismo usuario
+        unique_together = ('usuario', 'email')
+
+    def __str__(self):
+        return f"{self.usuario.username} - {self.email}"
     
 class Cliente(models.Model):
     TIPO_CLIENTE = [
