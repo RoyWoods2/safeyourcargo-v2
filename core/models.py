@@ -376,3 +376,32 @@ class LogActividad(models.Model):
     def __str__(self):
         return f"{self.usuario.username} - {self.mensaje} - {self.fecha}"
 
+class Aerolinea(models.Model):
+    nombre = models.CharField(max_length=255)
+    codigo_iata = models.CharField(max_length=10, unique=True, null=True, blank=True)
+    codigo_icao = models.CharField(max_length=10,  null=True, blank=True)
+    pais = models.CharField(max_length=100, null=True, blank=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = "Aerolínea"
+        verbose_name_plural = "Aerolíneas"
+        
+
+class Navio(models.Model):
+    nombre = models.CharField(max_length=255, db_index=True) # db_index para búsquedas más rápidas
+    imo = models.CharField(max_length=15, unique=True, null=True, blank=True)
+    mmsi = models.CharField(max_length=15, null=True, blank=True, db_index=True)
+    tipo = models.CharField(max_length=100, null=True, blank=True)
+    bandera = models.CharField(max_length=100, null=True, blank=True) # País de la bandera
+    naviera = models.CharField(max_length=255, null=True, blank=True)
+
+    def __str__(self):
+        return self.nombre
+
+    class Meta:
+        verbose_name = "Navío"
+        verbose_name_plural = "Navíos"
+        ordering = ['nombre']

@@ -2077,3 +2077,63 @@ class NsureTestView(View):
         }
         return render(request, self.template_name, context)
 
+
+
+@require_http_methods(["GET"])
+def buscar_aerolineas(request):
+    """
+    Vista para buscar aerolíneas en nuestra base de datos local.
+    """
+    query = request.GET.get('query', '')
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    # Busca en la base de datos local coincidencias en el nombre O en el código IATA
+    # 'icontains' es para búsqueda case-insensitive (no distingue mayúsculas/minúsculas)
+    resultados = Aerolinea.objects.filter(
+        Q(nombre__icontains=query) | 
+        Q(codigo_iata__icontains=query)
+    ).values('nombre', 'codigo_iata')[:10] # Limita a 10 resultados para ser rápido
+
+    # Formatea la respuesta para que el JavaScript la entienda
+    resultados_formateados = [
+        {
+            'name': f"{item['nombre']}", # Puedes ajustar cómo se ve el nombre
+            'iata': item['codigo_iata']
+        }
+        for item in resultados
+    ]
+    
+    return JsonResponse({'results': resultados_formateados})
+def pagina_prueba_aeronaves(request):
+    """
+    Vista temporal para mostrar la página de prueba del autocompletado de aeronaves.
+    """
+    return render(request, 'core/prueba_aeronaves.html')
+
+
+@require_http_methods(["GET"])
+def buscar_navios(request):
+    """
+    Vista para buscar navíos en la base de datos local.
+    """
+    query = request.GET.get('query', '')
+    if len(query) < 2:
+        return JsonResponse({'results': []})
+
+    # Busca en el modelo Navio por nombre o IMO
+    resultados = Navio.objects.filter(
+        Q(nombre__icontains=query) | 
+        Q(imo__icontains=query)
+    ).values('nombre', 'imo', 'naviera')[:15]
+
+    # Formatea la respuesta para el JavaScript
+    resultados_formateados = [
+        {
+            'name': f"{item['nombre']} ({item['naviera'] or 'N/A'})",
+            'imo': item['imo']
+        }
+        for item in resultados
+    ]
+    
+    return JsonResponse({'results': resultados_formateados})

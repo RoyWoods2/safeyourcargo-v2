@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prueba Autocompletado de Aerolíneas</title> <style>
+        body { font-family: sans-serif; padding: 2em; }
+        #q_aerolinea { width: 300px; padding: 8px; font-size: 16px; } /* ID cambiado */
+        #resultados { border: 1px solid #ccc; margin-top: 5px; max-height: 300px; overflow-y: auto; }
+        .resultado-item { display: flex; align-items: center; padding: 10px; cursor: pointer; border-bottom: 1px solid #eee; }
+        .resultado-item:hover { background-color: #f0f0f0; }
+        .resultado-item img { margin-right: 12px; width: 40px; height: 40px; object-fit: contain; }
+        .resultado-item span { font-size: 16px; }
+    </style>
+</head>
+<body>
+
+    <h2>Buscar Aerolínea</h2> <p>Escribe al menos 2 letras del nombre de la aerolínea (ej. "latam", "iberia").</p>
+
+    <input type="text" id="q_aerolinea" placeholder="Buscar aerolínea..."> <div id="resultados"></div>
+
+    <script>
+        const inputAerolinea = document.getElementById('q_aerolinea'); // Variable cambiada
+        const resultadosDiv = document.getElementById('resultados');
+
+        inputAerolinea.addEventListener('keyup', async () => {
+            const query = inputAerolinea.value;
+
+            if (query.length < 2) {
+                resultadosDiv.innerHTML = '';
+                return;
+            }
+
+            try {
+                // CAMBIO: Apuntamos a la nueva URL
+                const response = await fetch(`/buscar-aerolineas/?query=${query}`);
+                if (!response.ok) throw new Error('Error del servidor');
+                
+                const data = await response.json();
+
+                resultadosDiv.innerHTML = '';
+
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(aerolinea => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.classList.add('resultado-item');
+                        
+                        // Logo usando el código IATA
+                        const logo = aerolinea.iata 
+                            ? `<img src="https://images.daisycon.io/airline/?iata=${aerolinea.iata}" alt="${aerolinea.name}">`
+                            : '<img src="https://via.placeholder.com/40" alt="N/A">';
+
+                        // Mostramos solo el nombre de la aerolínea
+                        itemDiv.innerHTML = `${logo} <span>${aerolinea.name}</span>`;
+
+                        // Al hacer clic, rellenamos el input con el nombre completo
+                        itemDiv.addEventListener('click', () => {
+                            inputAerolinea.value = aerolinea.name; // Rellenamos con el nombre
+                            resultadosDiv.innerHTML = '';
+                        });
+
+                        resultadosDiv.appendChild(itemDiv);
+                    });
+                } else {
+                    resultadosDiv.innerHTML = '<div style="padding: 8px;">No se encontraron resultados.</div>';
+                }
+
+            } catch (error) {
+                console.error('Error en el autocompletado:', error);
+                resultadosDiv.innerHTML = '<div style="padding: 8px; color: red;">Error al buscar.</div>';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -34,7 +34,6 @@ urlpatterns = [
     path('certificados/probar-envio-xml/', views.probar_envio, name='probar_envio'),
     path('api/buscar-aeronaves/', views.buscar_aeronaves, name='buscar_aeronaves'),
     path('api/buscar-navios/', views.buscar_navios, name='buscar_navios'),
-    path('api/buscar-transporte/', views.buscar_transporte, name='buscar_transporte'),
     path('prueba-envio/', views.prueba_envio_correo, name='prueba_envio_correo'),
     path('folios/', views.vista_folios_disponibles, name='vista_folios_disponibles'),
     path('factura/<int:factura_id>/reenviar/', views.reenviar_factura_xml, name='reenviar_factura_xml'),
@@ -43,4 +42,8 @@ urlpatterns = [
     path('test-envio-certificado/', views.test_envio_certificado_real, name='test_envio_certificado'),
     path('test/api-puertos/', views.buscar_puertos_api_externa, name='buscar_puertos_api_externa'),
     path('test-email/', views.test_email_view, name='test_email'),
-    path('nsure-test/', NsureTestView.as_view(), name='nsure_test'),    ]
+    path('nsure-test/', NsureTestView.as_view(), name='nsure_test'),  
+    path('buscar-aerolineas/', views.buscar_aerolineas, name='buscar_aerolineas'),
+    path('prueba-aeronaves/', views.pagina_prueba_aeronaves, name='pagina_prueba_aeronaves'),
+    path('buscar-navios/', views.buscar_navios, name='buscar_navios'),
+    ]

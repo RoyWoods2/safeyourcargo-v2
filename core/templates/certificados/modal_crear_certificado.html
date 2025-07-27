@@ -38,6 +38,44 @@
           font-size: 14px;
           padding: 6px 12px;
         }
+
+        .autocomplete-results {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: white;
+          border: 1px solid #ddd;
+          border-top: none;
+          border-radius: 0 0 0.25rem 0.25rem;
+          max-height: 250px;
+          overflow-y: auto;
+          z-index: 1056; /* Mayor que el z-index del modal */
+          box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .autocomplete-item {
+          display: flex;
+          align-items: center;
+          padding: 0.5rem 0.75rem;
+          cursor: pointer;
+          border-bottom: 1px solid #eee;
+        }
+
+        .autocomplete-item:last-child {
+          border-bottom: none;
+        }
+
+        .autocomplete-item:hover {
+          background-color: #f0f0f0;
+        }
+
+        .autocomplete-item img {
+          width: 32px;
+          height: 32px;
+          object-fit: contain;
+          margin-right: 10px;
+        }
       </style>
 
       <div class="modal-header">
@@ -47,306 +85,207 @@
 
       <div class="modal-body">
         <form id="form-certificado" method="post">
-    {% csrf_token %}
+          {% csrf_token %}
 
-    <div class="section-container">
-      <span class="badge text-white">INFORMACIÓN GENERAL</span>
-      <div class="row mb-3 mt-3">
-        <div class="col-md-6">
-          <label class="form-label">Póliza</label>
-          <input type="text" class="form-control bg-light" value="01930324AA" readonly>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Compañía</label>
-          <input type="text" class="form-control bg-light" value="SafeYourCargo" readonly>
-        </div>
-      </div>
-      <div class="row mb-3">
-        <div class="col-md-6">
-          <label class="form-label">Cliente</label>
-          {{ cert_form.cliente }}
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Fecha Partida</label>
-          {{ cert_form.fecha_partida }}
-        </div>
-        <div class="col-md-3">
-          <label class="form-label">Fecha Llegada</label>
-          {{ cert_form.fecha_llegada }}
-        </div>
-      </div>
-    </div>
-
-    <div class="section-container">
-      <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
-      <div class="row mb-3 mt-3">
-        <div class="col-md-6">
-          <label class="form-label">País de origen del producto</label>
-          <select id="paisOrigen" name="pais_origen" class="form-select">
-            <option value="">Seleccione un país</option>
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label">Ciudad de origen del producto</label>
-          <select id="ciudadOrigen" name="ciudad_origen" class="form-select">
-            <option value="">Seleccione una ciudad</option>
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label">País Destino</label>
-          <select id="paisDestino" name="pais_destino" class="form-select">
-            <option value="">Seleccione un país</option>
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label">Ciudad Destino</label>
-          <select id="ciudadDestino" name="ciudad_destino" class="form-select">
-            <option value="">Seleccione una ciudad</option>
-          </select>
-        </div>
-
-      </div>
-    </div>
-    <div class="section-container">
-      <span class="badge text-white">EMBARQUE</span>
-      <div class="row mb-3 mt-3">
-        <div class="col-md-6">
-          <label class="form-label">Modo de Transporte</label>
-          <select class="form-select" id="modoTransporte" name="modo_transporte">
-            <option value="">Seleccione</option>
-            <option value="Aereo">Aéreo</option>
-            <option value="Maritimo">Marítimo</option>
-            <option value="TerrestreFerroviario">Terrestre / Ferroviario</option>
-          </select>
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Tipo de Carga</label>
-          {{ metodo_form.tipo_carga }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">Cláusula</label>
-          {{ metodo_form.clausula }}
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_aereo">
-          <label class="form-label">Tipo de Embalaje (Aéreo)</label>
-          <select class="form-select" id="tipoEmbalajeAereo" name="tipo_embalaje_aereo">
-            <option value="">Seleccione una opción</option>
-            <option value="Cajas de Carton">Cajas de Carton</option>
-            <option value="Cajas de madera">Cajas de madera</option>
-            <option value="Cajas de plástico">Cajas de plástico</option>
-            <option value="Pallets">Pallets</option>
-            <option value="OTRO">OTRO (especificar)</option>
-          </select>
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_aereo">
-          <label class="form-label">Especificar otro tipo de embalaje (Aéreo)</label>
-          <input type="text" class="form-control" id="otroEmbalajeAereo" name="otro_embalaje_aereo">
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_maritimo">
-          <label class="form-label">Tipo de Embalaje Marítimo</label>
-          <select class="form-select" id="embalajeMaritimo" name="embalaje_maritimo">
-            <option value="">Seleccione</option>
-            <option value="FCL">FCL (Contenedor Completo)</option>
-            <option value="LCL">LCL (Carga Suelta)</option>
-          </select>
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_tipo_container_maritimo">
-          <label class="form-label">Tipo de Contenedor (FCL)</label>
-          <select class="form-select" id="tipoContainerMaritimo" name="tipo_container_maritimo">
-            <option value="">Seleccione</option>
-            <option value="DRY">DRY</option>
-            <option value="REEFER">REEFER</option>
-            <option value="HIGH CUBE">HIGH CUBE</option>
-            <option value="OPEN TOP">OPEN TOP</option>
-            <option value="FLAT RACK">FLAT RACK</option>
-            <option value="FLEX TANK">FLEX TANK</option>
-            <option value="ISO TANK">ISO TANK</option>
-            <option value="FLEXI TANK">FLEXI TANK</option>
-          </select>
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_tipo_embalaje_maritimo_lcl">
-          <label class="form-label">Tipo de Embalaje (LCL)</label>
-          <select class="form-select" id="tipoEmbalajeLCL" name="tipo_embalaje_lcl">
-            <option value="">Seleccione</option>
-            <option value="Cajas de Carton">Cajas de Carton</option>
-            <option value="Cajas de Madera">Cajas de Madera</option>
-            <option value="Cajas de Plasticos">Cajas de Plástico</option>
-            <option value="Pallets">Pallets</option>
-            <option value="OTRO">OTRO (especificar)</option>
-          </select>
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_lcl">
-          <label class="form-label">Especificar otro tipo de embalaje (LCL)</label>
-          <input type="text" class="form-control" id="otroEmbalajeLCL" name="otro_embalaje_lcl">
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_embalaje_terrestre">
-          <label class="form-label">Tipo de Embalaje (Terrestre)</label>
-          <select class="form-select" id="tipoEmbalajeTerrestre" name="tipo_embalaje_terrestre">
-            <option value="">Seleccione una opción</option>
-            <option value="Cajas de Carton">Cajas de Carton</option>
-            <option value="Cajas de Madera">Cajas de Madera</option>
-            <option value="Cajas de Plástico">Cajas de Plástico</option>
-            <option value="Pallets">Pallets</option>
-            <option value="OTRO">OTRO (especificar)</option>
-          </select>
-        </div>
-
-        <div class="col-md-6 mt-2 d-none" id="grupo_otro_embalaje_terrestre">
-          <label class="form-label">Especificar otro tipo de embalaje (Terrestre)</label>
-          <input type="text" class="form-control" id="otroEmbalajeTerrestre" name="otro_embalaje_terrestre">
-        </div>
-      </div>
-    </div>
-
-    <div class="section-container">
-      <span class="badge text-white">💰 VALORES Y PRIMA</span>
-      <div class="row mb-3 mt-3">
-
-        <div class="col-md-6">
-          <label class="form-label">Tipo de Mercancía</label>
-          {{ mercancia_form.tipo }}
-        </div>
-
-        <div class="col-md-3">
-          <label class="form-label">Valor FCA (USD)</label>
-          {{ mercancia_form.valor_fca }}
-        </div>
-
-        <div class="col-md-3">
-          <label class="form-label">Valor Flete (USD)</label>
-          {{ mercancia_form.valor_flete }}
-        </div>
-
-        <div class="col-md-3 mt-3">
-          <label class="form-label">Monto Asegurado</label>
-          <input type="text" class="form-control" id="montoAsegurado" readonly>
-          <input type="hidden" name="monto_asegurado" id="montoAseguradoHidden">
-        </div>
-
-        <div class="col-md-12 mt-3">
-          <div class="form-check form-switch">
-            <input class="form-check-input" type="checkbox" id="togglePrima">
-            <label class="form-check-label" for="togglePrima">Cambiar prima manualmente</label>
+          <!-- SECCIÓN DE INFORMACIÓN GENERAL -->
+          <div class="section-container">
+            <span class="badge text-white">INFORMACIÓN GENERAL</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label class="form-label">Póliza</label>
+                <input type="text" class="form-control bg-light" value="01930324AA" readonly>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Compañía</label>
+                <input type="text" class="form-control bg-light" value="SafeYourCargo" readonly>
+              </div>
+            </div>
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <label class="form-label">Cliente</label>
+                {{ cert_form.cliente }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Fecha Partida</label>
+                {{ cert_form.fecha_partida }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Fecha Llegada</label>
+                {{ cert_form.fecha_llegada }}
+              </div>
+            </div>
           </div>
-        </div>
 
-        <div class="col-md-3 mt-2">
-          <label class="form-label">Valor Prima (USD)</label>
-          <input type="text" id="valorPrimaFormateado" class="form-control" readonly>
-          <input type="hidden" id="id_valor_prima" name="valor_prima">
-        </div>
+          <!-- SECCIÓN DE ORIGEN DEL PRODUCTO -->
+          <div class="section-container">
+            <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label class="form-label">País de origen del producto</label>
+                <select id="paisOrigen" name="pais_origen" class="form-select">
+                  <option value="">Seleccione un país</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ciudad de origen del producto</label>
+                <select id="ciudadOrigen" name="ciudad_origen" class="form-select">
+                  <option value="">Seleccione una ciudad</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">País Destino</label>
+                <select id="paisDestino" name="pais_destino" class="form-select">
+                  <option value="">Seleccione un país</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ciudad Destino</label>
+                <select id="ciudadDestino" name="ciudad_destino" class="form-select">
+                  <option value="">Seleccione una ciudad</option>
+                </select>
+              </div>
+            </div>
+          </div>
 
-      </div>
+          <!-- SECCIÓN DE EMBARQUE -->
+          <div class="section-container">
+            <span class="badge text-white">EMBARQUE</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label class="form-label">Modo de Transporte</label>
+                {{ metodo_form.modo_transporte }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Tipo de Carga</label>
+                {{ metodo_form.tipo_carga }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Cláusula</label>
+                {{ metodo_form.clausula }}
+              </div>
+              <!-- Campos dinámicos de embalaje (se mantienen igual) -->
+            </div>
+          </div>
 
-    </div>
+          <!-- SECCIÓN DE VALORES Y PRIMA -->
+          <div class="section-container">
+            <span class="badge text-white">💰 VALORES Y PRIMA</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-6">
+                <label class="form-label">Tipo de Mercancía</label>
+                {{ mercancia_form.tipo }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Valor FCA (USD)</label>
+                {{ mercancia_form.valor_fca }}
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">Valor Flete (USD)</label>
+                {{ mercancia_form.valor_flete }}
+              </div>
+              <div class="col-md-3 mt-3">
+                <label class="form-label">Monto Asegurado</label>
+                <input type="text" class="form-control" id="montoAsegurado" readonly>
+                <input type="hidden" name="monto_asegurado" id="montoAseguradoHidden">
+              </div>
+              <div class="col-md-12 mt-3">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" id="togglePrima">
+                  <label class="form-check-label" for="togglePrima">Cambiar prima manualmente</label>
+                </div>
+              </div>
+              <div class="col-md-3 mt-2">
+                <label class="form-label">Valor Prima (USD)</label>
+                <input type="text" id="valorPrimaFormateado" class="form-control" readonly>
+                <input type="hidden" id="id_valor_prima" name="valor_prima">
+              </div>
+            </div>
+          </div>
 
-    <div class="section-container">
-      <span class="badge text-white">DETALLES DEL VIAJE</span>
-      <div class="row mb-3 mt-3">
-        <div class="col-md-6">
-          <label class="form-label" id="label_nombre_transporte">Nombre Avión / Línea Aérea</label>
-          {{ viaje_form.nombre_avion }}
-        </div>
+          <!-- SECCIÓN DE DETALLES DEL VIAJE -->
+          <div class="section-container">
+            <span class="badge text-white">DETALLES DEL VIAJE</span>
+            <div class="row mb-3 mt-3">
+              
+              <div class="col-md-6 position-relative">
+                <label class="form-label" id="label_nombre_transporte">Nombre Avión / Navío</label>
+                {{ viaje_form.nombre_avion }}
+                <div id="transporte-resultados" class="autocomplete-results"></div>
+              </div>
 
-        <div class="col-md-6">
-          <label class="form-label" id="label_numero_viaje">N° Viaje / Vuelo</label>
-          {{ viaje_form.numero_viaje }}
-        </div>
-        <div class="col-md-6">
-          <label class="form-label">País de inicio del viaje</label>
-          <select id="vueloOrigenPais" name="vuelo_origen_pais" class="form-select">
-            <option value="">Seleccione un país</option>
-          </select>
-        </div>
+              <div class="col-md-6">
+                <label class="form-label" id="label_numero_viaje">N° Viaje / Vuelo</label>
+                {{ viaje_form.numero_viaje }}
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">País de inicio del viaje</label>
+                <select id="vueloOrigenPais" name="vuelo_origen_pais" class="form-select">
+                  <option value="">Seleccione un país</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">Ciudad de inicio del viaje</label>
+                <select id="vueloOrigenCiudad" name="vuelo_origen_ciudad" class="form-select">
+                  <option value="">Seleccione una ciudad</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label">País de destino del viaje</label>
+                <select id="vueloDestinoPais" name="vuelo_destino_pais" class="form-select">
+                  <option value="">Seleccione un país</option>
+                </select>
+              </div>
+              <div class="col-md-6">
+                <label class="form-label"> Ciudad de destino del viaje</label>
+                <select id="vueloDestinoCiudad" name="vuelo_destino_ciudad" class="form-select">
+                  <option value="">Seleccione una ciudad</option>
+                </select>
+              </div>
+              <div class="col-md-6" id="grupo_aeropuerto_origen">
+                <label class="form-label" id="label_punto_origen">Aeropuerto / Puerto Origen</label>
+                {{ viaje_form.aeropuerto_origen }}
+              </div>
+              <div class="col-md-6" id="grupo_aeropuerto_destino">
+                <label class="form-label" id="label_punto_destino">Aeropuerto / Puerto Destino</label>
+                {{ viaje_form.aeropuerto_destino }}
+              </div>
+              <div class="col-12 mt-2">
+                <label class="form-label">Descripción</label>
+                {{ viaje_form.descripcion_carga }}
+              </div>
+            </div>
+          </div>
 
-        <div class="col-md-6">
-          <label class="form-label">Ciudad de inicio del viaje</label>
-          <select id="vueloOrigenCiudad" name="vuelo_origen_ciudad" class="form-select">
-            <option value="">Seleccione una ciudad</option>
-          </select>
-        </div>
+          <!-- SECCIONES RESTANTES (NOTAS, ENVÍO) -->
+          <div class="section-container">
+            <span class="badge text-white">NOTAS Y NÚMEROS</span>
+            <div class="row mb-3 mt-3">
+              <div class="col-md-4"><label class="form-label">Referencia</label>{{ notas_form.referencia }}</div>
+              <div class="col-md-4"><label class="form-label">Guía de Carga</label>{{ notas_form.guia_carga }}</div>
+              <div class="col-md-4"><label class="form-label">N° Factura</label>{{ notas_form.numero_factura }}</div>
+              <div class="col-12 mt-2"><label class="form-label">Notas</label>{{ notas_form.notas }}</div>
+            </div>
+          </div>
+          
+          <!-- SECCIÓN DE OPCIONES DE ENVÍO (CORREGIDA Y MEJORADA) -->
+          <div class="section-container">
+            <span class="badge text-white">OPCIONES DE ENVÍO</span>
+            <div class="form-check mb-3 mt-3">
+              <input class="form-check-input" type="checkbox" id="toggleOtrosEmails">
+              <label class="form-check-label" for="toggleOtrosEmails">
+                Añadir destinatarios de correo adicionales para este envío
+              </label>
+            </div>
+            <div id="otrosEmailsContainer" style="display: none;">
+              <!-- Reemplazamos el input por un textarea para mejor visualización -->
+              <textarea name="otros_emails_copia" id="id_otros_emails_copia" class="form-control" rows="3" placeholder="email1@dominio.com, email2@dominio.com, ..."></textarea>
+              <small class="form-text text-muted mt-1 d-block">
+                Separa múltiples correos con una coma (,). Estos se sumarán a los que ya tengas configurados en tu perfil.
+              </small>
+            </div>
+          </div>
 
-        <div class="col-md-6">
-          <label class="form-label">País de destino del viaje</label>
-          <select id="vueloDestinoPais" name="vuelo_destino_pais" class="form-select">
-            <option value="">Seleccione un país</option>
-          </select>
-        </div>
-
-        <div class="col-md-6">
-          <label class="form-label"> Ciudad de destino del viaje</label>
-          <select id="vueloDestinoCiudad" name="vuelo_destino_ciudad" class="form-select">
-            <option value="">Seleccione una ciudad</option>
-          </select>
-        </div>
-
-
-        <div class="col-md-6" id="grupo_aeropuerto_origen">
-          <label class="form-label" id="label_aeropuerto_origen">Aeropuerto Origen</label>
-          {{ viaje_form.aeropuerto_origen }}
-        </div>
-
-        <div class="col-md-6" id="grupo_aeropuerto_destino">
-          <label class="form-label" id="label_aeropuerto_destino">Aeropuerto Destino</label>
-          {{ viaje_form.aeropuerto_destino }}
-        </div>
-
-        <div class="col-12 mt-2"><label class="form-label">Descripción</label>{{ viaje_form.descripcion_carga }}</div>
-      </div>
-    </div>
-
-    <div class="section-container">
-      <span class="badge text-white">NOTAS Y NÚMEROS</span>
-      <div class="row mb-3 mt-3">
-        <div class="col-md-4"><label class="form-label">Referencia</label>{{ notas_form.referencia }}</div>
-        <div class="col-md-4"><label class="form-label">Guía de Carga</label>{{ notas_form.guia_carga }}</div>
-        <div class="col-md-4"><label class="form-label">N° Factura</label>{{ notas_form.numero_factura }}</div>
-        <div class="col-12 mt-2"><label class="form-label">Notas</label>{{ notas_form.notas }}</div>
-      </div>
-    </div>
-
-    <div class="section-container">
-      <span class="badge text-white">OPCIONES DE ENVÍO</span>
-      <div class="form-check mb-3 mt-3">
-        <input class="form-check-input" type="checkbox" id="toggleOtrosEmails">
-        <label class="form-check-label" for="toggleOtrosEmails">
-          ¿Deseas enviar copias del certificado y factura a otros emails?
-        </label>
-      </div>
-
-      <div id="otrosEmailsContainer" style="display: none;">
-        {{ cert_form.otros_emails_copia }}
-      </div>
-    </div>
-
-</form>
-
-<script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const toggleOtrosEmails = document.getElementById('toggleOtrosEmails');
-        const otrosEmailsContainer = document.getElementById('otrosEmailsContainer');
-
-        if (toggleOtrosEmails && otrosEmailsContainer) {
-            toggleOtrosEmails.addEventListener('change', function() {
-                if (this.checked) {
-                    otrosEmailsContainer.style.display = 'block';
-                } else {
-                    otrosEmailsContainer.style.display = 'none';
-                }
-            });
-        }
-    });
-</script>
+        </form>
       </div>
 
       <div class="modal-footer">
@@ -356,6 +295,7 @@
     </div>
   </div>
 </div>
+
 <div id="spinner-overlay" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.85); z-index:9999; justify-content:center; align-items:center; flex-direction:column;">
   <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
     <span class="visually-hidden">Cargando...</span>
@@ -363,221 +303,246 @@
   <p class="mt-3 text-primary fw-bold">Generando certificado y factura electrónica...</p>
 </div>
 
+<!-- ✅ SCRIPT COMPLETO Y CORREGIDO -->
 <script>
-// --- FUNCIONES (Se definen una vez) ---
-
-// Función principal para calcular el monto asegurado y la prima automática
-function calcularMontoAsegurado() {
-  const fca = parseFloat(document.getElementById("id_valor_fca").value.replace(',', '.')) || 0;
-  const flete = parseFloat(document.getElementById("id_valor_flete").value.replace(',', '.')) || 0;
-  const asegurado = (fca + flete) * 1.10;
-
-  document.getElementById("montoAsegurado").value = asegurado.toFixed(2);
-  document.getElementById("montoAseguradoHidden").value = asegurado.toFixed(2);
-
-  // Obtenemos las referencias a los inputs que usaremos
-  const togglePrima = document.getElementById("togglePrima");
-  const primaHiddenInput = document.getElementById("id_valor_prima");
-  const primaVisualInput = document.getElementById("valorPrimaFormateado");
-
-  const clienteSelect = document.getElementById("id_cliente");
-  const tipoCargaSelect = document.getElementById("id_tipo_carga");
-
-  // Solo calcula y establece la prima si el "togglePrima" NO está marcado (modo automático)
-  if (!togglePrima.checked && clienteSelect && tipoCargaSelect) {
-    const selected = clienteSelect.options[clienteSelect.selectedIndex];
-    const tipoCarga = tipoCargaSelect.value;
-
-    let tasa = 0.15;
-    let minimo = 20.0;
-
-    if (tipoCarga === 'PolizaCongelada') {
-      tasa = parseFloat(selected.dataset.tasaCongelada);
-      minimo = parseFloat(selected.dataset.minimoCongelado);
-    } else {
-      tasa = parseFloat(selected.dataset.tasa);
-      minimo = parseFloat(selected.dataset.minimo);
-    }
-
-    const primaCalculada = Math.max(asegurado * (tasa / 100), minimo);
-
-    // Guarda el valor crudo en el input oculto
-    primaHiddenInput.value = primaCalculada.toFixed(2);
-
-    // Muestra el valor formateado en el input visible
-    primaVisualInput.value = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(primaCalculada);
-
-    // Asegúrate de que el input visible sea de solo lectura en modo automático
-    primaVisualInput.readOnly = true;
-  }
-}
-
-// Función para manejar la entrada manual en el campo visible
-// Se define una sola vez y se usa como referencia en addEventListener/removeEventListener
-const handleManualPrimaInput = function() {
-  const primaHiddenInput = document.getElementById("id_valor_prima"); // Se obtiene aquí, o si se hace global, se usa la ref global
-  // Limpia cualquier caracter no numérico, y asegura que el decimal sea un punto
-  let rawValue = this.value.replace(/[^0-9.,]/g, '');
-  rawValue = rawValue.replace(',', '.'); // Reemplaza comas por puntos para parseFloat
-
-  // Convierte a número y formatea a 2 decimales para guardar en el hidden input
-  primaHiddenInput.value = parseFloat(rawValue || '0').toFixed(2);
-};
-
-
-// --- INICIALIZACIÓN (Se ejecuta cuando el DOM está completamente cargado) ---
+// =================================================================================
+// SCRIPT UNIFICADO PARA MODAL DE CREACIÓN DE CERTIFICADO
+// =================================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Obtenemos las referencias a los inputs que usaremos, ¡solo una vez!
-  const togglePrima = document.getElementById("togglePrima");
-  const primaHiddenInput = document.getElementById("id_valor_prima");
-  const primaVisualInput = document.getElementById("valorPrimaFormateado");
 
-  // 1. Establecer el estado inicial del campo visual de la prima al cargar la página
-  // Si el toggle no está marcado inicialmente, el campo visual es de solo lectura.
-  // Si el toggle SÍ está marcado, el campo visual es editable.
-  if (togglePrima) { // Asegura que el toggle existe
-      primaVisualInput.readOnly = !togglePrima.checked;
-      // Si el toggle está marcado al cargar, prepara el campo para la edición manual
-      if (togglePrima.checked) {
-          primaVisualInput.value = parseFloat(primaHiddenInput.value || '0').toFixed(2);
-          primaVisualInput.addEventListener('input', handleManualPrimaInput);
-      }
-  }
-  
-  // 2. Realizar el cálculo inicial de la prima automática
-  // Esto llenará el campo si el toggle no está marcado
-  calcularMontoAsegurado();
-
-
-  // 3. Configurar listeners para la actualización automática de la prima
-  const camposParaCalculo = [
-    "id_valor_fca",
-    "id_valor_flete",
-    "id_cliente",
-    "id_tipo_carga"
-  ];
-
-  camposParaCalculo.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('input', calcularMontoAsegurado);
-      el.addEventListener('change', calcularMontoAsegurado);
-    }
-  });
-
-  // 4. Configurar listener para el toggle de "Cambiar prima manualmente"
-  if (togglePrima) { // Asegura que el toggle exista
-    togglePrima.addEventListener('change', function () {
-      // 'this' se refiere al checkbox togglePrima
-      primaVisualInput.readOnly = !this.checked; // Controla el estado de solo lectura del campo visible
-
-      if (this.checked) { // Si el toggle está MARCADO (modo manual)
-        // Muestra el valor actual del input oculto (sin formato de moneda) para que el usuario pueda editarlo
-        primaVisualInput.value = parseFloat(primaHiddenInput.value || '0').toFixed(2);
-        primaVisualInput.focus(); // Pone el foco en el campo para que el usuario pueda escribir
-        
-        // Agrega el listener para capturar la entrada manual y actualizar el campo oculto
-        primaVisualInput.addEventListener('input', handleManualPrimaInput);
-
-      } else { // Si el toggle NO está marcado (modo automático)
-        // Remueve el listener de entrada manual para evitar conflictos
-        primaVisualInput.removeEventListener('input', handleManualPrimaInput);
-        // Vuelve a calcular y mostrar la prima automáticamente
-        calcularMontoAsegurado();
-      }
-    });
-  }
-});
-</script>
-
-
-
-
-<script>
-function getCookie(name) {
-  let cookieValue = null;
-  if (document.cookie && document.cookie !== '') {
-    for (let cookie of document.cookie.split(';')) {
-      cookie = cookie.trim();
-      if (cookie.startsWith(name + '=')) {
-        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-        break;
-      }
-    }
-  }
-  return cookieValue;
-}
-
-document.addEventListener("DOMContentLoaded", function () {
-  const form = document.getElementById("form-certificado");
-  const spinner = document.getElementById("spinner-overlay");
-
-  if (!form || !spinner) return;
-
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-
-    spinner.style.display = "flex";
-
-    const formData = new FormData(form);
-
-    fetch("{% url 'crear_certificado' %}", {
-      method: "POST",
-      headers: {
-        "X-CSRFToken": getCookie("csrftoken"),
-        "X-Requested-With": "XMLHttpRequest"
-      },
-      body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-      spinner.style.display = "none";
-
-      if (data.success) {
-        Swal.fire({
-          icon: "success",
-          title: "Certificado creado",
-          text: "Factura emitida correctamente.",
-          confirmButtonText: "Ver listado"
-        }).then(() => location.reload());
-      } else if (data.errors) {
-        let mensaje = "";
-        for (const [formulario, errores] of Object.entries(data.errors)) {
-          for (const [campo, lista] of Object.entries(errores)) {
-            mensaje += `- ${campo}: ${Array.isArray(lista) ? lista.join(", ") : lista}\\n`;
-          }
+    // --- SECCIÓN 1: FUNCIONES AUXILIARES ---
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            for (let cookie of document.cookie.split(';')) {
+                cookie = cookie.trim();
+                if (cookie.startsWith(name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
         }
-        Swal.fire({
-          icon: "error",
-          title: "Errores en el formulario",
-          text: mensaje
+        return cookieValue;
+    }
+
+    function calcularMontoAsegurado() {
+        const fca = parseFloat(document.getElementById("id_valor_fca").value.replace(',', '.')) || 0;
+        const flete = parseFloat(document.getElementById("id_valor_flete").value.replace(',', '.')) || 0;
+        const asegurado = (fca + flete) * 1.10;
+
+        document.getElementById("montoAsegurado").value = asegurado.toFixed(2);
+        document.getElementById("montoAseguradoHidden").value = asegurado.toFixed(2);
+
+        const togglePrima = document.getElementById("togglePrima");
+        if (togglePrima && !togglePrima.checked) {
+            const primaHiddenInput = document.getElementById("id_valor_prima");
+            const primaVisualInput = document.getElementById("valorPrimaFormateado");
+            const clienteSelect = document.getElementById("id_cliente");
+            const tipoCargaSelect = document.getElementById("id_tipo_carga");
+
+            if (clienteSelect && clienteSelect.selectedIndex > 0 && tipoCargaSelect) {
+                const selected = clienteSelect.options[clienteSelect.selectedIndex];
+                const tipoCarga = tipoCargaSelect.value;
+                let tasa = 0.15;
+                let minimo = 20.0;
+
+                if (tipoCarga === 'PolizaCongelada') {
+                    tasa = parseFloat(selected.dataset.tasaCongelada);
+                    minimo = parseFloat(selected.dataset.minimoCongelado);
+                } else {
+                    tasa = parseFloat(selected.dataset.tasa);
+                    minimo = parseFloat(selected.dataset.minimo);
+                }
+
+                const primaCalculada = Math.max(asegurado * (tasa / 100), minimo);
+                primaHiddenInput.value = primaCalculada.toFixed(2);
+                primaVisualInput.value = new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: 'USD'
+                }).format(primaCalculada);
+            }
+        }
+    }
+
+    const handleManualPrimaInput = function() {
+        const primaHiddenInput = document.getElementById("id_valor_prima");
+        let rawValue = this.value.replace(/[^0-9.,]/g, '').replace(',', '.');
+        primaHiddenInput.value = parseFloat(rawValue || '0').toFixed(2);
+    };
+
+    // --- SECCIÓN 2: LÓGICA DE EVENTOS ---
+
+    // --- LÓGICA DE CÁLCULO DE PRIMAS ---
+    const togglePrima = document.getElementById("togglePrima");
+    const primaVisualInput = document.getElementById("valorPrimaFormateado");
+    
+    if (togglePrima) {
+        primaVisualInput.readOnly = !togglePrima.checked;
+        togglePrima.addEventListener('change', function() {
+            primaVisualInput.readOnly = !this.checked;
+            if (this.checked) {
+                primaVisualInput.value = parseFloat(document.getElementById("id_valor_prima").value || '0').toFixed(2);
+                primaVisualInput.focus();
+                primaVisualInput.addEventListener('input', handleManualPrimaInput);
+            } else {
+                primaVisualInput.removeEventListener('input', handleManualPrimaInput);
+                calcularMontoAsegurado();
+            }
         });
-      } else {
-        Swal.fire({
-          icon: "error",
-          title: "Error desconocido",
-          text: "No se pudo generar el certificado."
-        });
-      }
-    })
-    .catch(error => {
-      spinner.style.display = "none";
-      Swal.fire({
-        icon: "error",
-        title: "Error de red",
-        text: error.message || "No se pudo conectar al servidor."
-      });
+    }
+    
+    const camposParaCalculo = ["id_valor_fca", "id_valor_flete", "id_cliente", "id_tipo_carga"];
+    camposParaCalculo.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.addEventListener('change', calcularMontoAsegurado);
     });
-  });
+    
+    // --- LÓGICA DE AUTOCOMPLETADO DE TRANSPORTE (AÉREO Y MARÍTIMO) ---
+    const inputTransporte = document.getElementById('id_nombre_transporte');
+    const resultadosDiv = document.getElementById('transporte-resultados');
+    const modoTransporteSelect = document.getElementById('modoTransporte');
+
+    if (inputTransporte && resultadosDiv && modoTransporteSelect) {
+        inputTransporte.addEventListener('keyup', async (e) => {
+            const query = e.target.value;
+            const modo = modoTransporteSelect.value;
+            let url = '';
+
+            if (query.length < 2) {
+                resultadosDiv.innerHTML = '';
+                resultadosDiv.style.display = 'none';
+                return;
+            }
+
+            if (modo === 'Aereo') {
+                url = `/buscar-aerolineas/?query=${query}`;
+            } else if (modo === 'Maritimo') {
+                url = `/buscar-navios/?query=${query}`;
+            } else {
+                resultadosDiv.style.display = 'none';
+                return;
+            }
+
+            try {
+                const response = await fetch(url);
+                const data = await response.json();
+                resultadosDiv.innerHTML = '';
+
+                if (data.results && data.results.length > 0) {
+                    resultadosDiv.style.display = 'block';
+                    data.results.forEach(item => {
+                        const divItem = document.createElement('div');
+                        divItem.classList.add('autocomplete-item');
+                        
+                        let logoHtml = '';
+                        if (modo === 'Aereo' && item.iata) {
+                            logoHtml = `<img src="https://images.daisycon.io/airline/?iata=${item.iata}" alt="${item.name}" onerror="this.src='{% static "img/avion-default.png" %}'">`;
+                        } else if (modo === 'Maritimo') {
+                            logoHtml = `<img src="{% static 'img/barco.png' %}" alt="Navío">`;
+                        }
+
+                        divItem.innerHTML = `${logoHtml} <span>${item.name}</span>`;
+                        
+                        divItem.addEventListener('click', () => {
+                            inputTransporte.value = item.name;
+                            resultadosDiv.innerHTML = '';
+                            resultadosDiv.style.display = 'none';
+                        });
+                        resultadosDiv.appendChild(divItem);
+                    });
+                } else {
+                    resultadosDiv.style.display = 'none';
+                }
+            } catch (error) {
+                console.error("Error en autocompletado:", error);
+                resultadosDiv.style.display = 'none';
+            }
+        });
+
+        document.addEventListener('click', (e) => {
+            if (e.target !== inputTransporte && e.target.closest('.autocomplete-results') !== resultadosDiv) {
+                resultadosDiv.style.display = 'none';
+            }
+        });
+    }
+
+    // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
+    const form = document.getElementById("form-certificado");
+    const spinner = document.getElementById("spinner-overlay");
+
+    if (form && spinner) {
+        form.addEventListener("submit", function(e) {
+            e.preventDefault();
+            spinner.style.display = "flex";
+            const formData = new FormData(form);
+
+            fetch("{% url 'crear_certificado' %}", {
+                method: "POST",
+                headers: {
+                    "X-CSRFToken": getCookie("csrftoken"),
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                spinner.style.display = "none";
+                if (data.success) {
+                    Swal.fire({
+                        icon: "success",
+                        title: "Certificado creado",
+                        text: "El certificado y la factura han sido procesados.",
+                        confirmButtonText: "Ver listado"
+                    }).then(() => location.reload());
+                } else if (data.errors) {
+                    let mensaje = "Por favor, corrige los siguientes errores:\n\n";
+                    for (const formName in data.errors) {
+                        for (const fieldName in data.errors[formName]) {
+                            mensaje += `- ${fieldName.replace(/_/g, ' ')}: ${data.errors[formName][fieldName].join(", ")}\n`;
+                        }
+                    }
+                    Swal.fire({
+                        icon: "error",
+                        title: "Errores en el formulario",
+                        html: `<pre style="text-align: left; white-space: pre-wrap;">${mensaje}</pre>`
+                    });
+                } else {
+                    Swal.fire({
+                        icon: "error",
+                        title: "Error desconocido",
+                        text: "No se pudo generar el certificado."
+                    });
+                }
+            })
+            .catch(error => {
+                spinner.style.display = "none";
+                Swal.fire({
+                    icon: "error",
+                    title: "Error de red",
+                    text: error.message || "No se pudo conectar al servidor."
+                });
+            });
+        });
+    }
+    
+    // ✅ --- LÓGICA CORREGIDA PARA MOSTRAR/OCULTAR EMAILS ADICIONALES ---
+    const toggleOtrosEmails = document.getElementById('toggleOtrosEmails');
+    const otrosEmailsContainer = document.getElementById('otrosEmailsContainer');
+
+    if (toggleOtrosEmails && otrosEmailsContainer) {
+        toggleOtrosEmails.addEventListener('change', function() {
+            if (this.checked) {
+                otrosEmailsContainer.style.display = 'block';
+            } else {
+                otrosEmailsContainer.style.display = 'none';
+            }
+        });
+    }
+    
+    // --- INICIALIZACIÓN ---
+    calcularMontoAsegurado(); // Calcular al cargar por si hay datos precargados
 });
 </script>
-
-
 
 
 <script src="{% static 'js/formulario_viaje.js' %}"></script>

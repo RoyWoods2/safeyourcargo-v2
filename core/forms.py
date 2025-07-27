@@ -236,40 +236,56 @@ class TipoMercanciaForm(forms.ModelForm):
             'valor_prima': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'inputmode': 'decimal'}),
         }
 class ViajeForm(forms.ModelForm):
-    aeropuerto_origen = forms.CharField(
+    """
+    Formulario para los detalles del viaje.
+    Es compatible tanto con transporte aéreo como marítimo.
+    """
+    # Campos extra que no están en el modelo, usados por el JS del frontend.
+    punto_origen = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_aeropuerto_origen'})
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_punto_origen'})
     )
-    aeropuerto_destino = forms.CharField(
+    punto_destino = forms.CharField(
         required=False,
-        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_aeropuerto_destino'})
+        widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_punto_destino'})
     )
 
     class Meta:
         model = Viaje
-        fields = '__all__'
+        # Lista explícita de campos para evitar conflictos.
+        # Usamos 'nombre_avion' porque así se llama en el modelo.
+        fields = [
+            'nombre_avion', 'numero_viaje', 'vuelo_origen_pais', 
+            'vuelo_origen_ciudad', 'aeropuerto_origen', 'vuelo_destino_pais', 
+            'vuelo_destino_ciudad', 'aeropuerto_destino', 'descripcion_carga'
+        ]
         widgets = {
-            'nombre_avion': forms.TextInput(attrs={'class': 'form-control'}),
+            # Al campo 'nombre_avion' le damos un ID genérico para el autocompletado JS.
+            'nombre_avion': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_nombre_transporte'}),
             'numero_viaje': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_origen_pais': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_origen_ciudad': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_destino_pais': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_destino_ciudad': forms.TextInput(attrs={'class': 'form-control'}),
             'descripcion_carga': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
+            'aeropuerto_origen': forms.TextInput(attrs={'class': 'form-control'}),
+            'aeropuerto_destino': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Cambiamos la etiqueta del campo para que sea genérica en la interfaz de usuario.
+        self.fields['nombre_avion'].label = "Nombre Avión / Navío"
 
-        # Si hay datos POST, asignar las opciones directamente
-        if self.data.get("aeropuerto_origen"):
-            self.fields['aeropuerto_origen'].widget.choices = [
-                (self.data.get("aeropuerto_origen"), self.data.get("aeropuerto_origen"))
+        # Lógica para manejar datos POST en los campos extra (no del modelo)
+        if self.data.get("punto_origen"):
+            self.fields['punto_origen'].widget.choices = [
+                (self.data.get("punto_origen"), self.data.get("punto_origen"))
             ]
 
-        if self.data.get("aeropuerto_destino"):
-            self.fields['aeropuerto_destino'].widget.choices = [
-                (self.data.get("aeropuerto_destino"), self.data.get("aeropuerto_destino"))
+        if self.data.get("punto_destino"):
+            self.fields['punto_destino'].widget.choices = [
+                (self.data.get("punto_destino"), self.data.get("punto_destino"))
             ]
 
 class NotasNumerosForm(forms.ModelForm):
