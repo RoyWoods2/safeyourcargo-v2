@@ -268,8 +268,8 @@ class ViajeForm(forms.ModelForm):
             'vuelo_destino_pais': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_destino_ciudad': forms.TextInput(attrs={'class': 'form-control'}),
             'descripcion_carga': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
-            'aeropuerto_origen': forms.TextInput(attrs={'class': 'form-control'}),
-            'aeropuerto_destino': forms.TextInput(attrs={'class': 'form-control'}),
+            'aeropuerto_origen': forms.Select(attrs={'class': 'form-select'}),
+            'aeropuerto_destino': forms.Select(attrs={'class': 'form-select'}),
         }
 
     def __init__(self, *args, **kwargs):

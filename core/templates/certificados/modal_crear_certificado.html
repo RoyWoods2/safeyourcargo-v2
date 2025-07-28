@@ -147,23 +147,58 @@
             </div>
           </div>
 
+
           <!-- SECCIÓN DE EMBARQUE -->
           <div class="section-container">
             <span class="badge text-white">EMBARQUE</span>
-            <div class="row mb-3 mt-3">
-              <div class="col-md-6">
-                <label class="form-label">Modo de Transporte</label>
+            <div class="row mb-3 mt-3 g-3">
+              <div class="col-md-4">
+                {{ metodo_form.modo_transporte.label_tag }}
                 {{ metodo_form.modo_transporte }}
               </div>
-              <div class="col-md-6">
-                <label class="form-label">Tipo de Carga</label>
+              <div class="col-md-4">
+                {{ metodo_form.tipo_carga.label_tag }}
                 {{ metodo_form.tipo_carga }}
               </div>
-              <div class="col-md-6">
-                <label class="form-label">Cláusula</label>
+              <div class="col-md-4">
+                {{ metodo_form.clausula.label_tag }}
                 {{ metodo_form.clausula }}
               </div>
-              <!-- Campos dinámicos de embalaje (se mantienen igual) -->
+
+              <div id="campos-embarque-dinamicos" class="col-12"><div class="row g-3">
+                <div id="grupo_embalaje_aereo" class="col-md-6 d-none">
+                  {{ metodo_form.tipo_embalaje_aereo.label_tag }}
+                  {{ metodo_form.tipo_embalaje_aereo }}
+                </div>
+                <div id="grupo_otro_embalaje_aereo" class="col-md-6 d-none">
+                  {{ metodo_form.otro_embalaje_aereo.label_tag }}
+                  {{ metodo_form.otro_embalaje_aereo }}
+                </div>
+                <div id="grupo_embalaje_maritimo" class="col-md-6 d-none">
+                  {{ metodo_form.embalaje_maritimo.label_tag }}
+                  {{ metodo_form.embalaje_maritimo }}
+                </div>
+                <div id="grupo_tipo_container_maritimo" class="col-md-6 d-none">
+                  {{ metodo_form.tipo_container_maritimo.label_tag }}
+                  {{ metodo_form.tipo_container_maritimo }}
+                </div>
+                <div id="grupo_tipo_embalaje_lcl" class="col-md-6 d-none">
+                  {{ metodo_form.tipo_embalaje_lcl.label_tag }}
+                  {{ metodo_form.tipo_embalaje_lcl }}
+                </div>
+                <div id="grupo_otro_embalaje_lcl" class="col-md-6 d-none">
+                   {{ metodo_form.otro_embalaje_lcl.label_tag }}
+                   {{ metodo_form.otro_embalaje_lcl }}
+                </div>
+                <div id="grupo_embalaje_terrestre" class="col-md-6 d-none">
+                  {{ metodo_form.tipo_embalaje_terrestre.label_tag }}
+                  {{ metodo_form.tipo_embalaje_terrestre }}
+                </div>
+                <div id="grupo_otro_embalaje_terrestre" class="col-md-6 d-none">
+                  {{ metodo_form.otro_embalaje_terrestre.label_tag }}
+                  {{ metodo_form.otro_embalaje_terrestre }}
+                </div>
+              </div></div>
             </div>
           </div>
 
@@ -370,12 +405,147 @@ document.addEventListener('DOMContentLoaded', () => {
         primaHiddenInput.value = parseFloat(rawValue || '0').toFixed(2);
     };
 
+    async function actualizarPuntosDeViaje(paisSelect, puntoSelect) {
+        const pais = paisSelect.value;
+        const modo = modoTransporteSelect.value;
+        puntoSelect.innerHTML = '<option value="">Cargando...</option>';
+
+        if (!pais || !modo) {
+            puntoSelect.innerHTML = '<option value="">Seleccione país y modo</option>';
+            return;
+        }
+
+        let url = '';
+        let postData = {};
+
+        if (modo === 'Aereo') {
+            url = '/obtener_aeropuertos/';
+            postData = { pais: pais };
+        } else if (modo === 'Maritimo') {
+            url = '/obtener_unlocode/';
+            postData = { pais: pais, function: '1' };
+        } else {
+            puntoSelect.innerHTML = '<option value="">No aplica</option>';
+            return;
+        }
+
+        try {
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+                body: JSON.stringify(postData)
+            });
+            const data = await response.json();
+            puntoSelect.innerHTML = '<option value="">Seleccione una opción</option>';
+
+            if (modo === 'Aereo' && data.aeropuertos) {
+                data.aeropuertos.forEach(item => {
+                    puntoSelect.add(new Option(`${item.name} (${item.iata_code})`, item.name));
+                });
+            } else if (modo === 'Maritimo' && data.ubicaciones) {
+                data.ubicaciones.forEach(item => {
+                    puntoSelect.add(new Option(`${item.name} (${item.subdivision})`, item.name));
+                });
+            }
+        } catch (error) {
+            console.error('Error al cargar puntos de viaje:', error);
+            puntoSelect.innerHTML = '<option value="">Error al cargar</option>';
+        }
+    }
+
     // --- SECCIÓN 2: LÓGICA DE EVENTOS ---
 
-    // --- LÓGICA DE CÁLCULO DE PRIMAS ---
+    // Definición de todos los elementos del DOM
+    const modoTransporteSelect = document.getElementById('modoTransporte');
+    const camposAereo = document.getElementById('campos-embarque-aereo');
+    const camposMaritimo = document.getElementById('campos-embarque-maritimo');
+    const camposTerrestre = document.getElementById('campos-embarque-terrestre');
+    const embalajeMaritimoSelect = document.querySelector('[name="embalaje_maritimo"]');
+    const camposFCL = document.getElementById('campos-fcl');
+    const camposLCL = document.getElementById('campos-lcl');
     const togglePrima = document.getElementById("togglePrima");
     const primaVisualInput = document.getElementById("valorPrimaFormateado");
-    
+    const inputTransporte = document.getElementById('id_nombre_transporte');
+    const resultadosDiv = document.getElementById('transporte-resultados');
+    const paisOrigenViaje = document.getElementById('vueloOrigenPais');
+    const paisDestinoViaje = document.getElementById('vueloDestinoPais');
+    const puntoOrigenSelect = document.querySelector('[name="aeropuerto_origen"]');
+    const puntoDestinoSelect = document.querySelector('[name="aeropuerto_destino"]');
+    const form = document.getElementById("form-certificado");
+    const spinner = document.getElementById("spinner-overlay");
+    const toggleOtrosEmails = document.getElementById('toggleOtrosEmails');
+    const otrosEmailsContainer = document.getElementById('otrosEmailsContainer');
+        // Contenedores principales
+    const grupoEmbalajeAereo = document.getElementById('grupo_embalaje_aereo');
+    const grupoOtroEmbalajeAereo = document.getElementById('grupo_otro_embalaje_aereo');
+    const grupoEmbalajeMaritimo = document.getElementById('grupo_embalaje_maritimo');
+    const grupoTipoContainerMaritimo = document.getElementById('grupo_tipo_container_maritimo');
+    const grupoTipoEmbalajeLCL = document.getElementById('grupo_tipo_embalaje_lcl');
+    const grupoOtroEmbalajeLCL = document.getElementById('grupo_otro_embalaje_lcl');
+    const grupoEmbalajeTerrestre = document.getElementById('grupo_embalaje_terrestre');
+    const grupoOtroEmbalajeTerrestre = document.getElementById('grupo_otro_embalaje_terrestre');
+
+    // Selects que disparan cambios
+    const tipoEmbalajeAereoSelect = document.querySelector('[name="tipo_embalaje_aereo"]');
+    const embalajeMaritimoSelect = document.querySelector('[name="embalaje_maritimo"]');
+    const tipoEmbalajeLCLSelect = document.querySelector('[name="tipo_embalaje_lcl"]');
+    const tipoEmbalajeTerrestreSelect = document.querySelector('[name="tipo_embalaje_terrestre"]');
+    // Lógica de visibilidad de campos de embarque
+    function actualizarVisibilidadEmbarque() {
+        const modo = modoTransporteSelect.value;
+        
+        // Ocultar todos los grupos dinámicos para empezar de cero
+        const todosLosGrupos = [
+            grupoEmbalajeAereo, grupoOtroEmbalajeAereo, grupoEmbalajeMaritimo, 
+            grupoTipoContainerMaritimo, grupoTipoEmbalajeLCL, grupoOtroEmbalajeLCL,
+            grupoEmbalajeTerrestre, grupoOtroEmbalajeTerrestre
+        ];
+        todosLosGrupos.forEach(el => el.classList.add('d-none'));
+
+        if (modo === 'Aereo') {
+            grupoEmbalajeAereo.classList.remove('d-none');
+            // Comprobar si "OTRO" está seleccionado para mostrar el campo de texto
+            if (tipoEmbalajeAereoSelect.value === 'OTRO') {
+                grupoOtroEmbalajeAereo.classList.remove('d-none');
+            }
+        } else if (modo === 'Maritimo') {
+            grupoEmbalajeMaritimo.classList.remove('d-none');
+            const tipoEmbalaje = embalajeMaritimoSelect.value;
+            if (tipoEmbalaje === 'FCL') {
+                grupoTipoContainerMaritimo.classList.remove('d-none');
+            } else if (tipoEmbalaje === 'LCL') {
+                grupoTipoEmbalajeLCL.classList.remove('d-none');
+                // Comprobar si "OTRO" está seleccionado en LCL
+                if (tipoEmbalajeLCLSelect.value === 'OTRO') {
+                    grupoOtroEmbalajeLCL.classList.remove('d-none');
+                }
+            }
+        } else if (modo === 'TerrestreFerroviario') {
+            grupoEmbalajeTerrestre.classList.remove('d-none');
+            // Comprobar si "OTRO" está seleccionado
+            if (tipoEmbalajeTerrestreSelect.value === 'OTRO') {
+                grupoOtroEmbalajeTerrestre.classList.remove('d-none');
+            }
+        }
+    }
+
+
+    function actualizarVisibilidadMaritimo() {
+        const tipoEmbalaje = embalajeMaritimoSelect.value;
+        camposFCL.classList.add('d-none');
+        camposLCL.classList.add('d-none');
+        if (tipoEmbalaje === 'FCL') camposFCL.classList.remove('d-none');
+        else if (tipoEmbalaje === 'LCL') camposLCL.classList.remove('d-none');
+    }
+
+    modoTransporteSelect.addEventListener('change', () => {
+        actualizarVisibilidadEmbarque();
+        actualizarPuntosDeViaje(paisOrigenViaje, puntoOrigenSelect);
+        actualizarPuntosDeViaje(paisDestinoViaje, puntoDestinoSelect);
+    });
+    if (embalajeMaritimoSelect) embalajeMaritimoSelect.addEventListener('change', actualizarVisibilidadMaritimo);
+
+    // Lógica de cálculo de primas
     if (togglePrima) {
         primaVisualInput.readOnly = !togglePrima.checked;
         togglePrima.addEventListener('change', function() {
@@ -390,59 +560,45 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    
     const camposParaCalculo = ["id_valor_fca", "id_valor_flete", "id_cliente", "id_tipo_carga"];
     camposParaCalculo.forEach(id => {
         const el = document.getElementById(id);
         if (el) el.addEventListener('change', calcularMontoAsegurado);
     });
-    
-    // --- LÓGICA DE AUTOCOMPLETADO DE TRANSPORTE (AÉREO Y MARÍTIMO) ---
-    const inputTransporte = document.getElementById('id_nombre_transporte');
-    const resultadosDiv = document.getElementById('transporte-resultados');
-    const modoTransporteSelect = document.getElementById('modoTransporte');
 
-    if (inputTransporte && resultadosDiv && modoTransporteSelect) {
+    // Lógica de autocompletado de transporte
+    if (inputTransporte && resultadosDiv) {
         inputTransporte.addEventListener('keyup', async (e) => {
             const query = e.target.value;
             const modo = modoTransporteSelect.value;
             let url = '';
-
             if (query.length < 2) {
                 resultadosDiv.innerHTML = '';
                 resultadosDiv.style.display = 'none';
                 return;
             }
-
-            if (modo === 'Aereo') {
-                url = `/buscar-aerolineas/?query=${query}`;
-            } else if (modo === 'Maritimo') {
-                url = `/buscar-navios/?query=${query}`;
-            } else {
+            if (modo === 'Aereo') url = `/buscar-aerolineas/?query=${query}`;
+            else if (modo === 'Maritimo') url = `/buscar-navios/?query=${query}`;
+            else {
                 resultadosDiv.style.display = 'none';
                 return;
             }
-
             try {
                 const response = await fetch(url);
                 const data = await response.json();
                 resultadosDiv.innerHTML = '';
-
                 if (data.results && data.results.length > 0) {
                     resultadosDiv.style.display = 'block';
                     data.results.forEach(item => {
                         const divItem = document.createElement('div');
                         divItem.classList.add('autocomplete-item');
-                        
                         let logoHtml = '';
                         if (modo === 'Aereo' && item.iata) {
                             logoHtml = `<img src="https://images.daisycon.io/airline/?iata=${item.iata}" alt="${item.name}" onerror="this.src='{% static "img/avion-default.png" %}'">`;
                         } else if (modo === 'Maritimo') {
                             logoHtml = `<img src="{% static 'img/barco.png' %}" alt="Navío">`;
                         }
-
                         divItem.innerHTML = `${logoHtml} <span>${item.name}</span>`;
-                        
                         divItem.addEventListener('click', () => {
                             inputTransporte.value = item.name;
                             resultadosDiv.innerHTML = '';
@@ -458,7 +614,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 resultadosDiv.style.display = 'none';
             }
         });
-
         document.addEventListener('click', (e) => {
             if (e.target !== inputTransporte && e.target.closest('.autocomplete-results') !== resultadosDiv) {
                 resultadosDiv.style.display = 'none';
@@ -466,34 +621,26 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // --- LÓGICA DE ENVÍO DEL FORMULARIO ---
-    const form = document.getElementById("form-certificado");
-    const spinner = document.getElementById("spinner-overlay");
+    // Lógica de carga de puntos de viaje
+    paisOrigenViaje.addEventListener('change', () => actualizarPuntosDeViaje(paisOrigenViaje, puntoOrigenSelect));
+    paisDestinoViaje.addEventListener('change', () => actualizarPuntosDeViaje(paisDestinoViaje, puntoDestinoSelect));
 
+    // Lógica de envío de formulario
     if (form && spinner) {
         form.addEventListener("submit", function(e) {
             e.preventDefault();
             spinner.style.display = "flex";
             const formData = new FormData(form);
-
             fetch("{% url 'crear_certificado' %}", {
                 method: "POST",
-                headers: {
-                    "X-CSRFToken": getCookie("csrftoken"),
-                    "X-Requested-With": "XMLHttpRequest"
-                },
+                headers: { "X-CSRFToken": getCookie("csrftoken"), "X-Requested-With": "XMLHttpRequest" },
                 body: formData
             })
             .then(res => res.json())
             .then(data => {
                 spinner.style.display = "none";
                 if (data.success) {
-                    Swal.fire({
-                        icon: "success",
-                        title: "Certificado creado",
-                        text: "El certificado y la factura han sido procesados.",
-                        confirmButtonText: "Ver listado"
-                    }).then(() => location.reload());
+                    Swal.fire({ icon: "success", title: "Certificado creado", text: "El certificado y la factura han sido procesados.", confirmButtonText: "Ver listado" }).then(() => location.reload());
                 } else if (data.errors) {
                     let mensaje = "Por favor, corrige los siguientes errores:\n\n";
                     for (const formName in data.errors) {
@@ -501,48 +648,31 @@ document.addEventListener('DOMContentLoaded', () => {
                             mensaje += `- ${fieldName.replace(/_/g, ' ')}: ${data.errors[formName][fieldName].join(", ")}\n`;
                         }
                     }
-                    Swal.fire({
-                        icon: "error",
-                        title: "Errores en el formulario",
-                        html: `<pre style="text-align: left; white-space: pre-wrap;">${mensaje}</pre>`
-                    });
+                    Swal.fire({ icon: "error", title: "Errores en el formulario", html: `<pre style="text-align: left; white-space: pre-wrap;">${mensaje}</pre>` });
                 } else {
-                    Swal.fire({
-                        icon: "error",
-                        title: "Error desconocido",
-                        text: "No se pudo generar el certificado."
-                    });
+                    Swal.fire({ icon: "error", title: "Error desconocido", text: "No se pudo generar el certificado." });
                 }
             })
             .catch(error => {
                 spinner.style.display = "none";
-                Swal.fire({
-                    icon: "error",
-                    title: "Error de red",
-                    text: error.message || "No se pudo conectar al servidor."
-                });
+                Swal.fire({ icon: "error", title: "Error de red", text: error.message || "No se pudo conectar al servidor." });
             });
         });
     }
-    
-    // ✅ --- LÓGICA CORREGIDA PARA MOSTRAR/OCULTAR EMAILS ADICIONALES ---
-    const toggleOtrosEmails = document.getElementById('toggleOtrosEmails');
-    const otrosEmailsContainer = document.getElementById('otrosEmailsContainer');
 
+    // Lógica para mostrar/ocultar emails adicionales
     if (toggleOtrosEmails && otrosEmailsContainer) {
         toggleOtrosEmails.addEventListener('change', function() {
-            if (this.checked) {
-                otrosEmailsContainer.style.display = 'block';
-            } else {
-                otrosEmailsContainer.style.display = 'none';
-            }
+            otrosEmailsContainer.style.display = this.checked ? 'block' : 'none';
         });
     }
-    
+
     // --- INICIALIZACIÓN ---
-    calcularMontoAsegurado(); // Calcular al cargar por si hay datos precargados
+    calcularMontoAsegurado();
+    actualizarVisibilidadEmbarque();
 });
 </script>
+
 
 
 <script src="{% static 'js/formulario_viaje.js' %}"></script>
