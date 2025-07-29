@@ -688,18 +688,50 @@ const togglePrima = document.getElementById("togglePrima");
 
 // Calcula monto asegurado y prima
 function calcularMontoAsegurado() {
-    const fca = parseFloat((fcaInput.value || "0").replace(",", ".")) || 0;
-    const flete = parseFloat((fleteInput.value || "0").replace(",", ".")) || 0;
+    const fcaEl = document.getElementById("id_valor_fca");
+    const fleteEl = document.getElementById("id_valor_flete");
+    const montoAseguradoEl = document.getElementById("montoAsegurado");
+    const montoAseguradoHiddenEl = document.getElementById("montoAseguradoHidden");
+    const togglePrimaEl = document.getElementById("togglePrima");
+    const primaHiddenInput = document.getElementById("id_valor_prima");
+    const primaVisualInput = document.getElementById("valorPrimaFormateado");
+    const clienteSelect = document.getElementById("id_cliente");
+    const tipoCargaSelect = document.getElementById("id_tipo_carga");
+
+    if (!fcaEl || !fleteEl || !montoAseguradoEl || !montoAseguradoHiddenEl) return;
+
+    const fca = parseFloat(fcaEl.value.replace(',', '.')) || 0;
+    const flete = parseFloat(fleteEl.value.replace(',', '.')) || 0;
     const asegurado = (fca + flete) * 1.10;
 
-    montoAseguradoInput.value = asegurado.toFixed(2);
-    montoAseguradoHidden.value = asegurado.toFixed(2);
+    montoAseguradoEl.value = asegurado.toFixed(2);
+    montoAseguradoHiddenEl.value = asegurado.toFixed(2);
 
-    // Solo calcular prima automáticamente si no está en modo manual
-    if (!togglePrima.checked) {
-        actualizarPrimaCalculada(asegurado);
+    if (togglePrimaEl && !togglePrimaEl.checked) {
+        if (clienteSelect && clienteSelect.selectedIndex > 0 && tipoCargaSelect) {
+            const selected = clienteSelect.options[clienteSelect.selectedIndex];
+            const tipoCarga = tipoCargaSelect.value;
+            let tasa = 0.15;
+            let minimo = 20.0;
+
+            if (tipoCarga === 'PolizaCongelada') {
+                tasa = parseFloat(selected.dataset.tasaCongelada);
+                minimo = parseFloat(selected.dataset.minimoCongelado);
+            } else {
+                tasa = parseFloat(selected.dataset.tasa);
+                minimo = parseFloat(selected.dataset.minimo);
+            }
+
+            const primaCalculada = Math.max(asegurado * (tasa / 100), minimo);
+            primaHiddenInput.value = primaCalculada.toFixed(2);
+            primaVisualInput.value = new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD'
+            }).format(primaCalculada);
+        }
     }
 }
+
 
 function actualizarPrimaCalculada(asegurado) {
     const selected = clienteSelect.options[clienteSelect.selectedIndex];
