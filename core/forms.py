@@ -184,44 +184,6 @@ class MetodoEmbarqueForm(forms.ModelForm):
             'otro_embalaje_terrestre': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
-    def clean(self):
-        cleaned_data = super().clean()
-        modo = cleaned_data.get("modo_transporte")
-
-        # AÉREO
-        if modo == "Aereo":
-            tipo = cleaned_data.get("tipo_embalaje_aereo")
-            otro = cleaned_data.get("otro_embalaje_aereo")
-            if not tipo:
-                self.add_error("tipo_embalaje_aereo", "Debe seleccionar el tipo de embalaje para aéreo.")
-            if tipo == "OTRO" and not otro:
-                self.add_error("otro_embalaje_aereo", "Debe especificar el embalaje aéreo.")
-
-        # MARÍTIMO
-        elif modo == "Maritimo":
-            embalaje_maritimo = cleaned_data.get("embalaje_maritimo")
-            if not embalaje_maritimo:
-                self.add_error("embalaje_maritimo", "Debe seleccionar FCL o LCL para marítimo.")
-            if embalaje_maritimo == "FCL":
-                tipo = cleaned_data.get("tipo_container_maritimo")
-                if not tipo:
-                    self.add_error("tipo_container_maritimo", "Debe seleccionar tipo de contenedor.")
-            elif embalaje_maritimo == "LCL":
-                tipo = cleaned_data.get("tipo_embalaje_lcl")
-                otro = cleaned_data.get("otro_embalaje_lcl")
-                if not tipo:
-                    self.add_error("tipo_embalaje_lcl", "Debe seleccionar el tipo de embalaje.")
-                if tipo == "OTRO" and not otro:
-                    self.add_error("otro_embalaje_lcl", "Debe especificar el embalaje.")
-
-        # TERRESTRE
-        elif modo == "TerrestreFerroviario":
-            tipo = cleaned_data.get("tipo_embalaje_terrestre")
-            otro = cleaned_data.get("otro_embalaje_terrestre")
-            if not tipo:
-                self.add_error("tipo_embalaje_terrestre", "Debe seleccionar el tipo de embalaje.")
-            if tipo == "OTRO" and not otro:
-                self.add_error("otro_embalaje_terrestre", "Debe especificar el embalaje.")
 
 
 

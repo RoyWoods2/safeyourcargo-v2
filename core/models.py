@@ -194,31 +194,75 @@ class Ruta(models.Model):
     pais_destino = models.CharField(max_length=100)
     ciudad_destino = models.CharField(max_length=100)
     
+    
+# Valores constantes
+TIPOS_EMBALAJE_AEREO = [
+    ('CAJAS_CARTON', 'Cajas de cartón'),
+    ('CAJAS_MADERA', 'Cajas de madera'),
+    ('CAJAS_PLASTICO', 'Cajas de plástico'),
+    ('PALLETS', 'Pallets'),
+    ('OTRO', 'OTRO: Especificar'),
+]
+
+TIPOS_CONTAINER = [
+    ('DRY', 'DRY'),
+    ('REEFER', 'REEFER'),
+    ('HIGH CUBE', 'HIGH CUBE'),
+    ('OPEN TOP', 'OPEN TOP'),
+    ('FLAT RACK', 'FLAT RACK'),
+    ('FLEX TANK', 'FLEX TANK'),
+    ('ISO TANK', 'ISO TANK'),
+    ('FLEXI TANK', 'FLEXI TANK'),
+]
+
 class MetodoEmbarque(models.Model):
     MODO_CHOICES = [
         ('Aereo', 'Aéreo'),
         ('Maritimo', 'Marítimo'),
         ('TerrestreFerroviario', 'Terrestre y/o Ferroviario'),
-        ('MarRojo', 'Marítimo vía Mar Rojo')
+        ('MarRojo', 'Marítimo vía Mar Rojo'),
     ]
     TIPO_CARGA_CHOICES = [
         ('PolizaGeneral', 'Póliza para Carga General y/o Carga Seca'),
         ('PolizaCongelada', 'Póliza para Carga Congelada'),
     ]
-    CLAUSULA_CHOICES = [('A', 'Tipo A'), ('C', 'Tipo C')]
+    CLAUSULA_CHOICES = [
+        ('A', 'Tipo A'),
+        ('C', 'Tipo C'),
+    ]
 
     modo_transporte = models.CharField(max_length=50, choices=MODO_CHOICES)
     tipo_carga = models.CharField(max_length=50, choices=TIPO_CARGA_CHOICES)
     clausula = models.CharField(max_length=10, choices=CLAUSULA_CHOICES)
 
     # AÉREO
-    tipo_embalaje_aereo = models.CharField(max_length=100, blank=True, null=True)
+    tipo_embalaje_aereo = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        choices=TIPOS_EMBALAJE_AEREO
+    )
     otro_embalaje_aereo = models.CharField(max_length=100, blank=True, null=True)
 
     # MARÍTIMO
-    embalaje_maritimo = models.CharField(max_length=10, choices=[('FCL', 'FCL'), ('LCL', 'LCL')], blank=True, null=True)
-    tipo_container_maritimo = models.CharField(max_length=50, blank=True, null=True)
-    tipo_embalaje_lcl = models.CharField(max_length=100, blank=True, null=True)
+    embalaje_maritimo = models.CharField(
+        max_length=10,
+        choices=[('FCL', 'FCL'), ('LCL', 'LCL')],
+        blank=True,
+        null=True
+    )
+    tipo_container_maritimo = models.CharField(
+        max_length=50,
+        blank=True,
+        null=True,
+        choices=TIPOS_CONTAINER
+    )
+    tipo_embalaje_lcl = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        choices=TIPOS_EMBALAJE_AEREO
+    )
     otro_embalaje_lcl = models.CharField(max_length=100, blank=True, null=True)
 
     # TERRESTRE

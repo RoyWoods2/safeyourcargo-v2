@@ -357,7 +357,15 @@ document.addEventListener("DOMContentLoaded", function () {
       return;
     }
     
-    const url = `/api/buscar-transporte/?tipo=${tipoTransporte}&q=${encodeURIComponent(query)}`;
+    let url = '';
+    if (tipoTransporte === 'aereo') {
+        url = `/buscar-aerolineas/?query=${encodeURIComponent(query)}`;
+    } else if (tipoTransporte === 'maritimo') {
+        url = `/buscar-navios/?query=${encodeURIComponent(query)}`;
+    } else {
+        return; // si el tipo no es válido, salimos
+    }
+
     
     fetch(url)
       .then(response => response.json())
@@ -530,4 +538,225 @@ document.addEventListener("DOMContentLoaded", function () {
   if (ciudadDestinoRuta) ciudadDestinoRuta.addEventListener('change', function () {
     copiarValorSiVacio(this, vueloDestinoCiudad);
   });
+});
+
+
+document.addEventListener('DOMContentLoaded', () => {
+  const inputTransporte = document.getElementById('id_nombre_transporte');
+const resultadosDiv = document.getElementById('transporte-resultados');
+const modoTransporteSelect = document.getElementById('modoTransporte');
+
+if (inputTransporte && resultadosDiv && modoTransporteSelect) {
+    inputTransporte.addEventListener('keyup', async (e) => {
+        const query = e.target.value.trim();
+        const modo = modoTransporteSelect.value;
+
+        if (query.length < 2) {
+            resultadosDiv.innerHTML = '';
+            resultadosDiv.style.display = 'none';
+            return;
+        }
+
+        let url = '';
+        if (modo === 'Aereo') {
+            url = `/buscar-aerolineas/?query=${encodeURIComponent(query)}`;
+        } else if (modo === 'Maritimo') {
+            url = `/buscar-navios/?query=${encodeURIComponent(query)}`;
+        } else {
+            resultadosDiv.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(url);
+            const data = await response.json();
+
+            resultadosDiv.innerHTML = '';
+
+            if (data.results && data.results.length > 0) {
+                resultadosDiv.style.display = 'block';
+
+                data.results.forEach(item => {
+                    const divItem = document.createElement('div');
+                    divItem.classList.add('autocomplete-item');
+
+                    let logoHtml = '';
+                    if (modo === 'Aereo' && item.iata) {
+                        logoHtml = `<img src="https://images.daisycon.io/airline/?iata=${item.iata}" 
+                                        alt="${item.name}" 
+                                        onerror="this.src='/static/img/avion-default.png'">`;
+                    } else if (modo === 'Maritimo') {
+                        logoHtml = `<img src="/static/img/barco.png" alt="Navío">`;
+                    }
+
+                    divItem.innerHTML = `${logoHtml}<span>${item.name}</span>`;
+                    divItem.addEventListener('click', () => {
+                        inputTransporte.value = item.name;
+                        resultadosDiv.innerHTML = '';
+                        resultadosDiv.style.display = 'none';
+                    });
+
+                    resultadosDiv.appendChild(divItem);
+                });
+
+            } else {
+                resultadosDiv.style.display = 'none';
+            }
+
+        } catch (error) {
+            console.error("Error en autocompletado:", error);
+            resultadosDiv.style.display = 'none';
+        }
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!resultadosDiv.contains(e.target) && e.target !== inputTransporte) {
+            resultadosDiv.style.display = 'none';
+        }
+    });
+}
+
+// Grupos dinámicos
+const grupoEmbalajeAereo = document.getElementById('grupo_embalaje_aereo');
+const grupoOtroEmbalajeAereo = document.getElementById('grupo_otro_embalaje_aereo');
+const grupoEmbalajeMaritimo = document.getElementById('grupo_embalaje_maritimo');
+const grupoTipoContainerMaritimo = document.getElementById('grupo_tipo_container_maritimo');
+const grupoTipoEmbalajeLCL = document.getElementById('grupo_tipo_embalaje_lcl');
+const grupoOtroEmbalajeLCL = document.getElementById('grupo_otro_embalaje_lcl');
+
+// Selects
+const tipoEmbalajeAereoSelect = document.querySelector('[name="tipo_embalaje_aereo"]');
+const embalajeMaritimoSelect = document.querySelector('[name="embalaje_maritimo"]');
+const tipoEmbalajeLCLSelect = document.querySelector('[name="tipo_embalaje_lcl"]');
+
+function actualizarCamposEmbarque() {
+    // Ocultar todo
+    [grupoEmbalajeAereo, grupoOtroEmbalajeAereo, 
+     grupoEmbalajeMaritimo, grupoTipoContainerMaritimo, 
+     grupoTipoEmbalajeLCL, grupoOtroEmbalajeLCL]
+        .forEach(el => el.classList.add('d-none'));
+
+    const modo = modoTransporteSelect.value;
+
+    if (modo === 'Aereo') {
+        grupoEmbalajeAereo.classList.remove('d-none');
+        if (tipoEmbalajeAereoSelect && tipoEmbalajeAereoSelect.value === 'OTRO') {
+            grupoOtroEmbalajeAereo.classList.remove('d-none');
+        }
+
+    } else if (modo === 'Maritimo') {
+        grupoEmbalajeMaritimo.classList.remove('d-none');
+        if (embalajeMaritimoSelect.value === 'FCL') {
+            grupoTipoContainerMaritimo.classList.remove('d-none');
+        } else if (embalajeMaritimoSelect.value === 'LCL') {
+            grupoTipoEmbalajeLCL.classList.remove('d-none');
+            if (tipoEmbalajeLCLSelect.value === 'OTRO') {
+                grupoOtroEmbalajeLCL.classList.remove('d-none');
+            }
+        }
+    }
+}
+
+// Listeners
+modoTransporteSelect.addEventListener('change', actualizarCamposEmbarque);
+if (tipoEmbalajeAereoSelect) {
+    tipoEmbalajeAereoSelect.addEventListener('change', actualizarCamposEmbarque);
+}
+if (embalajeMaritimoSelect) {
+    embalajeMaritimoSelect.addEventListener('change', actualizarCamposEmbarque);
+}
+if (tipoEmbalajeLCLSelect) {
+    tipoEmbalajeLCLSelect.addEventListener('change', actualizarCamposEmbarque);
+}
+
+// Llamada inicial
+actualizarCamposEmbarque();
+// =====================
+// VALORES Y PRIMA
+// =====================
+
+// Elementos
+const fcaInput = document.getElementById("id_valor_fca");
+const fleteInput = document.getElementById("id_valor_flete");
+const clienteSelect = document.getElementById("id_cliente");
+const tipoCargaSelect = document.getElementById("id_tipo_carga");
+const montoAseguradoInput = document.getElementById("montoAsegurado");
+const montoAseguradoHidden = document.getElementById("montoAseguradoHidden");
+const primaHiddenInput = document.getElementById("id_valor_prima");
+const primaVisualInput = document.getElementById("valorPrimaFormateado");
+const togglePrima = document.getElementById("togglePrima");
+
+// Calcula monto asegurado y prima
+function calcularMontoAsegurado() {
+    const fca = parseFloat((fcaInput.value || "0").replace(",", ".")) || 0;
+    const flete = parseFloat((fleteInput.value || "0").replace(",", ".")) || 0;
+    const asegurado = (fca + flete) * 1.10;
+
+    montoAseguradoInput.value = asegurado.toFixed(2);
+    montoAseguradoHidden.value = asegurado.toFixed(2);
+
+    // Solo calcular prima automáticamente si no está en modo manual
+    if (!togglePrima.checked) {
+        actualizarPrimaCalculada(asegurado);
+    }
+}
+
+function actualizarPrimaCalculada(asegurado) {
+    const selected = clienteSelect.options[clienteSelect.selectedIndex];
+    const tipoCarga = tipoCargaSelect.value;
+
+    if (!selected || selected.index === 0) return;
+
+    // Lee tasas del option (usamos los data attributes)
+    let tasa = 0.15;
+    let minimo = 20.0;
+
+    if (tipoCarga === 'PolizaCongelada') {
+        tasa = parseFloat(selected.dataset.tasaCongelada);
+        minimo = parseFloat(selected.dataset.minimoCongelado);
+    } else {
+        tasa = parseFloat(selected.dataset.tasa);
+        minimo = parseFloat(selected.dataset.minimo);
+    }
+
+    const primaCalculada = Math.max(asegurado * (tasa / 100), minimo);
+
+    primaHiddenInput.value = primaCalculada.toFixed(2);
+    primaVisualInput.value = new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: "USD",
+    }).format(primaCalculada);
+}
+
+// Activa/desactiva el modo manual
+if (togglePrima) {
+    togglePrima.addEventListener("change", function () {
+        if (this.checked) {
+            // Activar edición manual
+            primaVisualInput.readOnly = false;
+            primaVisualInput.value = primaHiddenInput.value;
+            primaVisualInput.focus();
+        } else {
+            // Desactivar edición manual
+            primaVisualInput.readOnly = true;
+            calcularMontoAsegurado();
+        }
+    });
+
+    // Cuando se edita manualmente, sincronizar con el input hidden
+    primaVisualInput.addEventListener("input", function () {
+        let raw = this.value.replace(/[^0-9.,]/g, "").replace(",", ".");
+        primaHiddenInput.value = parseFloat(raw || "0").toFixed(2);
+    });
+}
+
+// Eventos que disparan recálculo automático
+[fcaInput, fleteInput, clienteSelect, tipoCargaSelect].forEach(el => {
+    if (el) el.addEventListener("change", calcularMontoAsegurado);
+});
+
+// Calcular al cargar
+calcularMontoAsegurado();
+
+
 });
