@@ -146,59 +146,72 @@
           </div>
 
 
-          <!-- SECCIÓN DE EMBARQUE -->
-          <div class="section-container">
-            <span class="badge text-white">EMBARQUE</span>
-            <div class="row mb-3 mt-3 g-3">
-              <div class="col-md-4">
-                {{ metodo_form.modo_transporte.label_tag }}
-                {{ metodo_form.modo_transporte }}
-              </div>
-              <div class="col-md-4">
-                {{ metodo_form.tipo_carga.label_tag }}
-                {{ metodo_form.tipo_carga }}
-              </div>
-              <div class="col-md-4">
-                {{ metodo_form.clausula.label_tag }}
-                {{ metodo_form.clausula }}
-              </div>
+<!-- SECCIÓN DE EMBARQUE -->
+<div class="section-container">
+  <span class="badge text-white">EMBARQUE</span>
 
-              <div id="campos-embarque-dinamicos" class="col-12"><div class="row g-3">
-                <div id="grupo_embalaje_aereo" class="col-md-6 d-none">
-                  {{ metodo_form.tipo_embalaje_aereo.label_tag }}
-                  {{ metodo_form.tipo_embalaje_aereo }}
-                </div>
-                <div id="grupo_otro_embalaje_aereo" class="col-md-6 d-none">
-                  {{ metodo_form.otro_embalaje_aereo.label_tag }}
-                  {{ metodo_form.otro_embalaje_aereo }}
-                </div>
-                <div id="grupo_embalaje_maritimo" class="col-md-6 d-none">
-                  {{ metodo_form.embalaje_maritimo.label_tag }}
-                  {{ metodo_form.embalaje_maritimo }}
-                </div>
-                <div id="grupo_tipo_container_maritimo" class="col-md-6 d-none">
-                  {{ metodo_form.tipo_container_maritimo.label_tag }}
-                  {{ metodo_form.tipo_container_maritimo }}
-                </div>
-                <div id="grupo_tipo_embalaje_lcl" class="col-md-6 d-none">
-                  {{ metodo_form.tipo_embalaje_lcl.label_tag }}
-                  {{ metodo_form.tipo_embalaje_lcl }}
-                </div>
-                <div id="grupo_otro_embalaje_lcl" class="col-md-6 d-none">
-                   {{ metodo_form.otro_embalaje_lcl.label_tag }}
-                   {{ metodo_form.otro_embalaje_lcl }}
-                </div>
-                <div id="grupo_embalaje_terrestre" class="col-md-6 d-none">
-                  {{ metodo_form.tipo_embalaje_terrestre.label_tag }}
-                  {{ metodo_form.tipo_embalaje_terrestre }}
-                </div>
-                <div id="grupo_otro_embalaje_terrestre" class="col-md-6 d-none">
-                  {{ metodo_form.otro_embalaje_terrestre.label_tag }}
-                  {{ metodo_form.otro_embalaje_terrestre }}
-                </div>
-              </div></div>
-            </div>
-          </div>
+  <div class="row mb-3 mt-3 g-3">
+    <!-- Campos principales -->
+    <div class="col-md-4">
+      {{ metodo_form.modo_transporte.label_tag }}
+      {{ metodo_form.modo_transporte }}
+    </div>
+    <div class="col-md-4">
+      {{ metodo_form.tipo_carga.label_tag }}
+      {{ metodo_form.tipo_carga }}
+    </div>
+    <div class="col-md-4">
+      {{ metodo_form.clausula.label_tag }}
+      {{ metodo_form.clausula }}
+    </div>
+
+    <!-- Campos dinámicos según el tipo de transporte -->
+    <div id="campos-embarque-dinamicos" class="col-12">
+      <div class="row g-3">
+
+        <!-- AÉREO -->
+        <div id="grupo_embalaje_aereo" class="col-md-6 d-none">
+          {{ metodo_form.tipo_embalaje_aereo.label_tag }}
+          {{ metodo_form.tipo_embalaje_aereo }}
+        </div>
+        <div id="grupo_otro_embalaje_aereo" class="col-md-6 d-none">
+          {{ metodo_form.otro_embalaje_aereo.label_tag }}
+          {{ metodo_form.otro_embalaje_aereo }}
+        </div>
+
+        <!-- MARÍTIMO -->
+        <div id="grupo_embalaje_maritimo" class="col-md-6 d-none">
+          {{ metodo_form.embalaje_maritimo.label_tag }}
+          {{ metodo_form.embalaje_maritimo }}
+        </div>
+        <div id="grupo_tipo_container_maritimo" class="col-md-6 d-none">
+          {{ metodo_form.tipo_container_maritimo.label_tag }}
+          {{ metodo_form.tipo_container_maritimo }}
+        </div>
+        <div id="grupo_tipo_embalaje_lcl" class="col-md-6 d-none">
+          {{ metodo_form.tipo_embalaje_lcl.label_tag }}
+          {{ metodo_form.tipo_embalaje_lcl }}
+        </div>
+        <div id="grupo_otro_embalaje_lcl" class="col-md-6 d-none">
+          {{ metodo_form.otro_embalaje_lcl.label_tag }}
+          {{ metodo_form.otro_embalaje_lcl }}
+        </div>
+
+        <!-- TERRESTRE -->
+        <div id="grupo_embalaje_terrestre" class="col-md-6 d-none">
+          {{ metodo_form.tipo_embalaje_terrestre.label_tag }}
+          {{ metodo_form.tipo_embalaje_terrestre }}
+        </div>
+        <div id="grupo_otro_embalaje_terrestre" class="col-md-6 d-none">
+          {{ metodo_form.otro_embalaje_terrestre.label_tag }}
+          {{ metodo_form.otro_embalaje_terrestre }}
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
 
           <!-- SECCIÓN DE VALORES Y PRIMA -->
           <div class="section-container">
