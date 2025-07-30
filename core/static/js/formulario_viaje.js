@@ -787,6 +787,7 @@ if (togglePrima) {
     if (el) el.addEventListener("change", calcularMontoAsegurado);
 });
 
+
 // Calcular al cargar
 calcularMontoAsegurado();
 

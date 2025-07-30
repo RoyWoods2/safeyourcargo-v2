@@ -239,10 +239,17 @@ def generar_xml_factura_exenta(factura: Factura) -> str:
 
     iddoc = etree.SubElement(encabezado, "IdDoc")
     etree.SubElement(iddoc, "TipoDTE").text = "34"
-    # IMPORTANTE: Aquí se usa factura.folio_sii. Asegúrate de que este campo esté
-    # poblado con el folio que tu sistema le asigna a la factura *antes* de llamara esta función.
-    # El SII valida este folio contra los rangos autorizados.
-    etree.SubElement(iddoc, "Folio").text = str(factura.folio_sii) 
+
+    # --- CAMBIO REALIZADO AQUÍ ---
+    # Se envía el folio como "0" para solicitar a facturacion.cl que asigne
+    # el siguiente número de folio correlativo y autorizado por el SII.
+    #
+    # --- ANTES ---
+    # etree.SubElement(iddoc, "Folio").text = str(factura.folio_sii)
+    #
+    # --- DESPUÉS ---
+    etree.SubElement(iddoc, "Folio").text = "0"
+
     etree.SubElement(iddoc, "FchEmis").text = factura.fecha_emision.strftime("%Y-%m-%d")
 
     emisor = etree.SubElement(encabezado, "Emisor")

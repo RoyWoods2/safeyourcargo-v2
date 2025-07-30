@@ -352,16 +352,6 @@ def save(self, *args, **kwargs):
     super().save(*args, **kwargs)
 
 
-# ✅ FUNCIÓN LIBRE (fuera del modelo)
-def obtener_siguiente_folio():
-    from .models import Factura
-    folio_min = 545
-    folio_max = 10000
-    usados = Factura.objects.exclude(folio_sii__isnull=True).values_list('folio_sii', flat=True)
-    for folio in range(folio_min, folio_max + 1):
-        if folio not in usados:
-            return folio
-    raise Exception("No hay folios disponibles en el rango 540–10000.")
 
 
 class CAF(models.Model):
