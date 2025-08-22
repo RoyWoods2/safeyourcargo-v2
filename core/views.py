@@ -47,18 +47,39 @@ from core.emails import enviar_certificado_y_factura
 from django.http import HttpResponseForbidden
 from django.utils.html import strip_tags
 from .api_client import nsure_api
-
+from django.db import models
 from django.views import View
+from django.utils import timezone
+from django.core.cache import cache
+import string
+from core.models import UnlocodeEntry
 Usuario = get_user_model()
 
 @login_required
 def dashboard(request):
-  
-
     user = request.user
 
-    # Inicialización
-    certificados_data = []
+    # ===== Rango de días (default 90) =====
+    try:
+        days = int(request.GET.get('days', 90))
+        days = max(0, min(days, 365))
+    except ValueError:
+        days = 90
+    date_filter = {}
+    if days > 0:
+        date_filter = {'fecha_creacion__gte': timezone.now() - timedelta(days=days)}
+
+    # ===== Excluir CLIENTES “Prueba*” =====
+    TEST_CLIENT_NAMES = ["Prueba", "Prueba 2", "Prueba 3"]
+    client_name_filters = Q()
+    for n in TEST_CLIENT_NAMES:
+        client_name_filters |= Q(nombre__iexact=n)
+    test_clients = Cliente.objects.filter(client_name_filters)
+
+    # Tipo de cambio (usa tu función/fallback)
+    resultado = obtener_dolar_observado("hans.arancibia@live.com", "Rhad19326366.")
+    dolar = Decimal(resultado.get("valor", '950.00'))
+
     certificados_clientes = []
     certificados_totales = []
     total_certificados_sum = 0
@@ -66,75 +87,97 @@ def dashboard(request):
     total_prima_clp = Decimal('0.0')
     total_clientes = 0
     ultimos_certificados = []
-
-    # Obtener tipo de cambio actual (USD a CLP)
-    resultado = obtener_dolar_observado("hans.arancibia@live.com", "Rhad19326366.")
-    if "valor" in resultado:
-        dolar = Decimal(resultado["valor"])
-    else:
-        dolar = Decimal('950.00')
+    origen_data = []
 
     if user.is_superuser or user.rol == "Administrador":
-        # Datos globales
-        certificados_data = (
-            Cliente.objects
-            .annotate(total_certificados=Count('certificadotransporte'))
-            .filter(total_certificados__gt=0)
-            .order_by('-total_certificados')
-        )
-        certificados_clientes = [c.nombre for c in certificados_data]
-        certificados_totales = [c.total_certificados for c in certificados_data]
-        total_certificados_sum = sum(certificados_totales)
-
-        # Total prima USD
-        total_prima_usd = (
+        # Certificados válidos (excluye clientes de prueba + por periodo)
+        certificados_ok = (
             CertificadoTransporte.objects
-            .aggregate(total=Sum('tipo_mercancia__valor_prima'))['total'] or Decimal('0.0')
+            .exclude(cliente__in=test_clients)
+            .filter(**date_filter)
         )
 
-        # Calcular prima total CLP
+        # Top clientes por cantidad (excluidos “Prueba*”)
+        clientes_ok = (
+            Cliente.objects
+            .exclude(client_name_filters)
+            .annotate(total_certificados=Count(
+                'certificadotransporte',
+                filter=Q(certificadotransporte__in=certificados_ok)
+            ))
+            .filter(total_certificados__gt=0)
+            .order_by('-total_certificados')[:12]
+        )
+        certificados_clientes = [c.nombre for c in clientes_ok]
+        certificados_totales  = [c.total_certificados for c in clientes_ok]
+        total_certificados_sum = certificados_ok.count()
+
+        total_prima_usd = certificados_ok.aggregate(
+            total=Sum('tipo_mercancia__valor_prima')
+        )['total'] or Decimal('0.0')
         total_prima_clp = total_prima_usd * dolar
 
-        # Total clientes con certificados
-        total_clientes = Cliente.objects.filter(certificadotransporte__isnull=False).distinct().count()
+        total_clientes = (
+            Cliente.objects.exclude(client_name_filters)
+            .filter(certificadotransporte__in=certificados_ok)
+            .distinct().count()
+        )
 
-        # Últimos certificados emitidos
         ultimos_certificados = (
-            CertificadoTransporte.objects
-            .select_related('cliente', 'ruta', 'tipo_mercancia')
+            certificados_ok.select_related('cliente', 'ruta', 'tipo_mercancia')
             .order_by('-id')[:5]
         )
 
-    elif user.rol == "Revendedor":
-        # Solo sus certificados
-        propios_certificados = CertificadoTransporte.objects.filter(cliente=user.cliente)
-        certificados_data = (
-            Cliente.objects
-            .filter(id=user.cliente.id)
-            .annotate(total_certificados=Count('certificadotransporte'))
+        origen_data = (
+            certificados_ok.values('ruta__pais_origen')
+            .annotate(cantidad=Count('id'))
+            .order_by('-cantidad')
         )
-        certificados_clientes = [user.cliente.nombre]
-        certificados_totales = [propios_certificados.count()]
+
+    elif user.rol == "Revendedor":
+        propios_certificados = (
+            CertificadoTransporte.objects
+            .filter(cliente=user.cliente, **date_filter)
+            .exclude(cliente__in=test_clients)
+        )
+        certificados_clientes = [user.cliente.nombre] if user.cliente and not test_clients.filter(pk=user.cliente_id).exists() else []
+        certificados_totales  = [propios_certificados.count()] if certificados_clientes else []
         total_certificados_sum = propios_certificados.count()
 
-        # Total prima USD (solo sus certificados)
-        total_prima_usd = (
-            propios_certificados
-            .aggregate(total=Sum('tipo_mercancia__valor_prima'))['total'] or Decimal('0.0')
-        )
+        total_prima_usd = propios_certificados.aggregate(
+            total=Sum('tipo_mercancia__valor_prima')
+        )['total'] or Decimal('0.0')
         total_prima_clp = total_prima_usd * dolar
 
-    # Datos dinámicos para origen de países
-    origen_data = (
-        CertificadoTransporte.objects
-        .values('ruta__pais_origen')
-        .annotate(cantidad=Count('id'))
-        .order_by('-cantidad')
-    )
-    origen_paises = [item['ruta__pais_origen'] for item in origen_data]
-    origen_cantidades = [item['cantidad'] for item in origen_data]
+        origen_data = (
+            propios_certificados.values('ruta__pais_origen')
+            .annotate(cantidad=Count('id')).order_by('-cantidad')
+        )
 
-    # Redondear y eliminar comas innecesarias (al entero más cercano)
+    else:
+        propios_certificados = (
+            CertificadoTransporte.objects
+            .filter(creado_por=user, **date_filter)
+            .exclude(cliente__in=test_clients)
+        )
+        agg = (propios_certificados.values('cliente__nombre')
+               .annotate(cantidad=Count('id'))
+               .order_by('-cantidad')[:12])
+        certificados_clientes = [x['cliente__nombre'] for x in agg]
+        certificados_totales  = [x['cantidad'] for x in agg]
+        total_certificados_sum = propios_certificados.count()
+
+        total_prima_usd = propios_certificados.aggregate(
+            total=Sum('tipo_mercancia__valor_prima')
+        )['total'] or Decimal('0.0')
+        total_prima_clp = total_prima_usd * dolar
+
+        origen_data = (
+            propios_certificados.values('ruta__pais_origen')
+            .annotate(cantidad=Count('id')).order_by('-cantidad')
+        )
+
+    # Redondeo para UI
     total_prima_usd = total_prima_usd.quantize(Decimal('1.'), rounding=ROUND_HALF_UP)
     total_prima_clp = total_prima_clp.quantize(Decimal('1.'), rounding=ROUND_HALF_UP)
 
@@ -146,11 +189,11 @@ def dashboard(request):
         'total_prima_clp': total_prima_clp,
         'total_clientes': total_clientes,
         'ultimos_certificados': ultimos_certificados,
-        'origen_paises': origen_paises,
-        'origen_cantidades': origen_cantidades,
+        'origen_paises': [i['ruta__pais_origen'] for i in origen_data],
+        'origen_cantidades': [i['cantidad'] for i in origen_data],
+        'days': days,
     }
     return render(request, 'core/dashboard.html', context)
-
 
 
 
@@ -178,109 +221,114 @@ def lista_clientes(request):
         if request.user.rol == 'Administrador':
             revendedores = Usuario.objects.filter(creado_por=request.user)
             clientes = Cliente.objects.filter(
-                models.Q(creado_por=request.user) |
-                models.Q(creado_por__in=revendedores)
+                Q(creado_por=request.user) | Q(creado_por__in=revendedores)
             )
         else:
             clientes = Cliente.objects.filter(creado_por=request.user)
-
     return render(request, 'core/clientes.html', {'clientes': clientes})
 
 
 @login_required
 def form_cliente(request):
     if request.method != 'POST':
-        return JsonResponse({'error': 'Método no permitido'}, status=405)
-
-    if not request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return HttpResponseBadRequest("Solo POST")
+    if request.headers.get("x-requested-with", "").lower() != "xmlhttprequest":
         return HttpResponseBadRequest("Solo se acepta AJAX aquí")
 
     cliente_id = request.POST.get("cliente_id")
-    rut = request.POST.get("rut")
-    nombre = request.POST.get("nombre")
+    rut = (request.POST.get("rut") or "").strip()
+    nombre = (request.POST.get("nombre") or "").strip()
 
+    # Cargar instancia dentro del scope
+    instance = None
     if cliente_id:
-        cliente = get_object_or_404(Cliente, pk=cliente_id)
-        form = ClienteForm(request.POST, instance=cliente)
-    else:
-        # Verificar si el RUT ya existe antes de crear
-        if Cliente.objects.filter(rut=rut).exists():
-            return JsonResponse({
-                'success': False,
-                'errors': {'rut': ['El RUT ingresado ya existe.']},
-                'duplicate': True
-            }, status=400)
+        if request.user.is_superuser:
+            instance = get_object_or_404(Cliente, pk=cliente_id)
+        elif request.user.rol == 'Administrador':
+            revendedores = Usuario.objects.filter(creado_por=request.user)
+            instance = get_object_or_404(
+                Cliente,
+                Q(creado_por=request.user) | Q(creado_por__in=revendedores),
+                pk=cliente_id,
+            )
+        else:
+            instance = get_object_or_404(Cliente, pk=cliente_id, creado_por=request.user)
 
-        # Verificar si el NOMBRE ya existe antes de crear
-        if Cliente.objects.filter(nombre=nombre).exists():
-            return JsonResponse({
-                'success': False,
-                'errors': {'nombre': ['Ya existe un cliente con este nombre.']},
-                'duplicate_nombre': True
-            }, status=400)
+    # Duplicados por usuario (solo creación, para devolver flags)
+    if not cliente_id:
+        qs = Cliente.objects.all()
+        if not request.user.is_superuser:
+            if request.user.rol == 'Administrador':
+                revendedores = Usuario.objects.filter(creado_por=request.user)
+                qs = qs.filter(Q(creado_por=request.user) | Q(creado_por__in=revendedores))
+            else:
+                qs = qs.filter(creado_por=request.user)
+        if rut and qs.filter(rut__iexact=rut).exists():
+            return JsonResponse({'success': False, 'duplicate': True,
+                                 'errors': {'rut': ['El RUT ingresado ya existe.']}}, status=400)
+        if nombre and qs.filter(nombre__iexact=nombre).exists():
+            return JsonResponse({'success': False, 'duplicate_nombre': True,
+                                 'errors': {'nombre': ['Ya existe un cliente con este nombre.']}}, status=400)
 
-        form = ClienteForm(request.POST)
-
+    form = ClienteForm(request.POST, instance=instance, user=request.user)
     if form.is_valid():
         cliente = form.save(commit=False)
-
         if not cliente_id:
             cliente.creado_por = request.user
-
         cliente.save()
-
-        if cliente_id:
-            registrar_actividad(request.user, f"Editó cliente: {cliente.nombre}")
-        else:
-            registrar_actividad(request.user, f"Creó cliente: {cliente.nombre}")
-
+        registrar_actividad(request.user, f"{'Editó' if cliente_id else 'Creó'} cliente: {cliente.nombre}")
         return JsonResponse({'success': True})
-    else:
-        return JsonResponse({
-            'success': False,
-            'errors': form.errors
-        }, status=400)
+    return JsonResponse({'success': False, 'errors': form.errors}, status=400)
 
 
 @login_required
 def editar_cliente(request, pk):
-    cliente = get_object_or_404(Cliente, pk=pk)
+    if request.user.is_superuser:
+        cliente = get_object_or_404(Cliente, pk=pk)
+    elif request.user.rol == 'Administrador':
+        revendedores = Usuario.objects.filter(creado_por=request.user)
+        cliente = get_object_or_404(
+            Cliente,
+            Q(creado_por=request.user) | Q(creado_por__in=revendedores),
+            pk=pk,
+        )
+    else:
+        cliente = get_object_or_404(Cliente, pk=pk, creado_por=request.user)
+
     if request.method == 'POST':
-        form = ClienteForm(request.POST, instance=cliente)
+        form = ClienteForm(request.POST, instance=cliente, user=request.user)
         if form.is_valid():
             cliente = form.save()
-            # 🔥 Registrar actividad
             registrar_actividad(request.user, f"Editó cliente: {cliente.nombre}")
-            return JsonResponse({
-                'success': True,
-                'cliente': {
-                    'nombre': cliente.nombre,
-                    'rut': cliente.rut,
-                    'correo': cliente.correo,
-                    'telefono': cliente.telefono,
-                    'ciudad': cliente.ciudad,
-                    'pais': cliente.pais,
-                }
-            })
-        else:
-            html = render(request, 'core/form_cliente.html', {'form': form}).content.decode()
-            return JsonResponse({'success': False, 'html': html})
+            return JsonResponse({'success': True})
+        return JsonResponse({'success': False, 'errors': form.errors}, status=400)
     else:
-        form = ClienteForm(instance=cliente)
+        form = ClienteForm(instance=cliente, user=request.user)
         return render(request, 'core/form_cliente.html', {'form': form})
+
 
 @require_POST
 @login_required
 def eliminar_cliente(request, pk):
-    try:
-        cliente = Cliente.objects.get(pk=pk)
-        nombre_cliente = cliente.nombre
-        cliente.delete()
-        # 🔥 Registrar actividad
-        registrar_actividad(request.user, f"Eliminó cliente: {nombre_cliente}")
-        return JsonResponse({'success': True})
-    except Cliente.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Cliente no encontrado'}, status=404)
+    if request.user.is_superuser:
+        cliente = get_object_or_404(Cliente, pk=pk)
+    elif request.user.rol == 'Administrador':
+        revendedores = Usuario.objects.filter(creado_por=request.user)
+        cliente = get_object_or_404(
+            Cliente,
+            Q(creado_por=request.user) | Q(creado_por__in=revendedores),
+            pk=pk,
+        )
+    else:
+        cliente = get_object_or_404(Cliente, pk=pk, creado_por=request.user)
+
+    nombre_cliente = cliente.nombre
+    cliente.delete()
+    registrar_actividad(request.user, f"Eliminó cliente: {nombre_cliente}")
+    return JsonResponse({'success': True})
+# (evita borrar clientes ajenos)  :contentReference[oaicite:10]{index=10}
+
+
 
 def obtener_ciudades(request):
     pais_id = request.GET.get('pais_id')
@@ -836,7 +884,112 @@ def generar_pdf_cobranza(request, certificado_id):
     return response
 
 
+# ---------- Helper de normalización ----------
+ISO_ALIASES = {
+    # agrega más alias si lo necesitas
+    "united states":        {"iso2": "US", "iso3": "USA", "names": ["United States", "United States of America", "USA", "U.S.", "U.S.A."]},
+    "russia":               {"iso2": "RU", "iso3": "RUS", "names": ["Russia", "Russian Federation"]},
+    "south korea":          {"iso2": "KR", "iso3": "KOR", "names": ["South Korea", "Republic of Korea", "Korea, Republic of"]},
+    "czech republic":       {"iso2": "CZ", "iso3": "CZE", "names": ["Czech Republic", "Czechia"]},
+    "uk":                   {"iso2": "GB", "iso3": "GBR", "names": ["United Kingdom", "Great Britain", "UK"]},
+    "uae":                  {"iso2": "AE", "iso3": "ARE", "names": ["United Arab Emirates", "UAE"]},
+}
 
+def normalize_country(pais: str, pais_code: str):
+    p = (pais or "").strip()
+    c = (pais_code or "").strip()
+    iso2 = ""
+    iso3 = ""
+    names = []
+
+    # si viene código
+    if len(c) == 2:
+        iso2 = c.upper()
+    elif len(c) == 3:
+        iso3 = c.upper()
+
+    # si viene nombre, busca alias
+    key = p.lower()
+    alias = ISO_ALIASES.get(key)
+    if alias:
+        iso2 = iso2 or alias["iso2"]
+        iso3 = iso3 or alias["iso3"]
+        names = alias["names"][:]
+    elif p:
+        names = [p]  # intenta con el nombre tal cual
+
+    # por si mandaron el nombre en código
+    if not iso2 and len(p) == 2:
+        iso2 = p.upper()
+    if not iso3 and len(p) == 3:
+        iso3 = p.upper()
+
+    return iso2, iso3, names
+NSURE_API = "https://igi.nsure.net/api/seaports/search/term/{term}"
+NSURE_HEADERS = {
+    "Content-Type": "application/json",
+    "Accept": "application/json",
+    "X-NS-API-Key": "PqrED4vo2UI8I8TlPTgOKmCo0C1OuSUzbgbpIBHQwgnA2343xbtwqjhmGZ2bckvp",
+}
+
+def _nsure_ports_fallback_by_country(iso2: str, names=None, timeout=10, per_term_limit=200):
+    """
+    Busca puertos por letras/dígitos y filtra por país usando:
+    - countryCode == iso2  OR
+    - countryName ∈ names  OR
+    - locode empieza con iso2
+    Deduplica por locode. Cachea 24h.
+    """
+    iso2 = (iso2 or "").upper().strip()
+    accepted_names = {n.lower() for n in (names or []) if n}
+
+    if not iso2 or len(iso2) != 2:
+        return []
+
+    cache_key = f"ports_nsure:{iso2}"
+    cached = cache.get(cache_key)
+    if cached:
+        return cached
+
+    terms = list(string.ascii_lowercase) + list("0123456789")
+    seen = set()
+    out = []
+
+    for t in terms:
+        try:
+            r = requests.get(NSURE_API.format(term=t), headers=NSURE_HEADERS, timeout=timeout)
+            r.raise_for_status()
+            data = r.json()
+            items = data if isinstance(data, list) else data.get("results", []) or []
+
+            for it in items[:per_term_limit]:
+                name_field = (it.get("countryName") or it.get("country_name") or it.get("country") or "").strip()
+                code_field = (it.get("countryCode") or it.get("country_code") or "").upper().strip()
+                locode     = (it.get("locode") or it.get("code") or "").upper().strip()
+                name_port  = (it.get("name") or it.get("portName") or it.get("port") or "").strip()
+
+                # --- 3 caminos de aceptación ---
+                ok = False
+                if code_field == iso2:
+                    ok = True
+                elif name_field and name_field.lower() in accepted_names:
+                    ok = True
+                elif locode.startswith(iso2):
+                    ok = True
+                if not ok:
+                    continue
+
+                if not locode or not name_port:
+                    continue
+                if locode in seen:
+                    continue
+                seen.add(locode)
+                out.append({"name": name_port, "locode": locode, "countryCode": code_field or iso2})
+        except requests.RequestException:
+            continue
+
+    cache.set(cache_key, out, 60 * 60 * 24)
+    return out
 
 @csrf_exempt
 def obtener_ciudades(request):
@@ -856,20 +1009,35 @@ def obtener_ciudades(request):
         return JsonResponse({"error": "No se pudieron obtener las ciudades"}, status=500)
     
     return JsonResponse({"error": "Método no permitido"}, status=405)
+# ---------- Aeropuertos ----------
 @csrf_exempt
 def obtener_aeropuertos(request):
-    if request.method == "POST":
-        try:
-            datos = json.loads(request.body)
-            pais = datos.get("pais")
-            print(f"📡 Recibido país: {pais}")
-            aeropuertos = get_airports_by_country(pais)
-            print(f"✅ Aeropuertos encontrados: {len(aeropuertos)}")
-            return JsonResponse({"aeropuertos": aeropuertos})
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"error": "Método no permitido"}, status=405)
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    try:
+        data = json.loads(request.body)
+        iso2, iso3, names = normalize_country(data.get("pais"), data.get("pais_code"))
+
+        aeropuertos = []
+
+        # 1) ISO-2
+        if iso2:
+            aeropuertos = get_airports_by_country(iso2)
+        # 2) ISO-3
+        if not aeropuertos and iso3:
+            aeropuertos = get_airports_by_country(iso3)
+        # 3) Aliases de nombre
+        if not aeropuertos:
+            for nm in names:
+                if not nm:
+                    continue
+                aeropuertos = get_airports_by_country(nm)
+                if aeropuertos:
+                    break
+
+        return JsonResponse({"aeropuertos": aeropuertos})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
 
 def obtener_paises(request):
     url = "https://restcountries.com/v3.1/all?fields=name,cca2,flags"
@@ -902,38 +1070,53 @@ def obtener_ciudades(request):
         return JsonResponse({"error": "No se pudieron obtener las ciudades"}, status=500)
     
     return JsonResponse({"error": "Método no permitido"}, status=405)
-@csrf_exempt
-def obtener_aeropuertos(request):
-    if request.method == "POST":
-        try:
-            datos = json.loads(request.body)
-            pais = datos.get("pais")
-            print(f"📡 Recibido país: {pais}")
-            aeropuertos = get_airports_by_country(pais)
-            print(f"✅ Aeropuertos encontrados: {len(aeropuertos)}")
-            return JsonResponse({"aeropuertos": aeropuertos})
-        except Exception as e:
-            print(f"❌ Error: {str(e)}")
-            return JsonResponse({"error": str(e)}, status=500)
-    return JsonResponse({"error": "Método no permitido"}, status=405)
 
+# ---------- Puertos (UN/LOCODE) ----------
 @csrf_exempt
 def obtener_unlocode(request):
-    if request.method == "POST":
-        try:
-            data = json.loads(request.body)
-            pais = data.get("pais")
-            funcion = data.get("function", "1")
+    if request.method != "POST":
+        return JsonResponse({"error": "Método no permitido"}, status=405)
+    try:
+        data = json.loads(request.body or "{}")
+        # acepta ambos, pero prioriza pais_code
+        pais_code = (data.get("pais_code") or data.get("pais") or "").strip().upper()
+        funcion   = str(data.get("function", "1")).strip()
+        q         = (data.get("q") or "").strip()
 
-            if not pais:
-                return JsonResponse({"error": "País no proporcionado"}, status=400)
+        if len(pais_code) != 2:
+            return JsonResponse({"ubicaciones": []})
 
-            ubicaciones = get_ports_by_country(pais, funcion)
-            return JsonResponse({"ubicaciones": ubicaciones})
-        except Exception as e:
-            return JsonResponse({"error": str(e)}, status=500)
+        cache_key = f"unlocode:{pais_code}:{'1' in funcion}:{q.lower()}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return JsonResponse({"ubicaciones": cached})
 
-    return JsonResponse({"error": "Método no permitido"}, status=405)
+        qs = UnlocodeEntry.objects.filter(country_code=pais_code)
+        if '1' in funcion:  # puertos marítimos
+            qs = qs.filter(function__icontains='1')
+        if q:
+            qs = qs.filter(
+                Q(name__icontains=q) |
+                Q(locode__icontains=q) |
+                Q(subdiv__icontains=q)
+            )
+
+        qs = qs.order_by("name")[:2000]  # seguridad para no traer todo
+        ubicaciones = [
+            {
+                "name": u.name,
+                "locode": u.locode,
+                "countryCode": u.country_code,
+                "subdiv": u.subdiv or ""
+            }
+            for u in qs
+        ]
+        cache.set(cache_key, ubicaciones, 60 * 60 * 12)  # 12 horas
+        return JsonResponse({"ubicaciones": ubicaciones})
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=500)
+
+
 
 
 
@@ -1871,12 +2054,17 @@ def descargar_factura_xml(request, factura_id):
 @login_required
 def exportar_cobranzas_excel(request):
     from .models import Cobranza
+    from decimal import Decimal
 
-    cobranzas = Cobranza.objects.select_related(
-        'certificado', 'certificado__cliente', 'certificado__metodo_embarque', 'certificado__factura', 'certificado__notas'
+    qs = Cobranza.objects.select_related(
+        'certificado',
+        'certificado__cliente',
+        'certificado__metodo_embarque',
+        'certificado__factura',
+        'certificado__notas'
     ).all()
 
-    # Filtros iguales a vista principal
+    # Filtros (mismos de la vista)
     cliente = request.GET.get("cliente")
     rut = request.GET.get("rut")
     certificado = request.GET.get("certificado")
@@ -1884,51 +2072,101 @@ def exportar_cobranzas_excel(request):
     fin = request.GET.get("fin")
 
     if cliente:
-        cobranzas = cobranzas.filter(certificado__cliente__nombre__icontains=cliente)
+        qs = qs.filter(certificado__cliente__nombre__icontains=cliente)
     if rut:
-        cobranzas = cobranzas.filter(certificado__cliente__rut__icontains=rut)
+        qs = qs.filter(certificado__cliente__rut__icontains=rut)
     if certificado:
-        cobranzas = cobranzas.filter(certificado__id__icontains=certificado)
+        qs = qs.filter(certificado__id__icontains=certificado)
     if inicio:
-        cobranzas = cobranzas.filter(certificado__fecha_creacion__gte=inicio)
+        qs = qs.filter(certificado__fecha_creacion__gte=inicio)
     if fin:
-        cobranzas = cobranzas.filter(certificado__fecha_creacion__lte=fin)
-    # Crear archivo Excel
+        qs = qs.filter(certificado__fecha_creacion__lte=fin)
+
+    # ---------- Workbook ----------
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Reporte Cobranzas"
 
+    # Controles de reporte (editables por el admin)
+    ws["A1"] = "Controles de reporte"; ws["A1"].font = Font(bold=True)
+    ws["A2"] = "TC reporte (CLP/USD)"
+    ws["A3"] = "Tasa override (%)"
+    ws["A4"] = "Mínimo override (USD)"
+
+    # TC por defecto: intenta usar el último tipo_cambio existente; si no, 950
+    default_tc = 950.0
+    for c in qs.order_by("-certificado__fecha_creacion"):
+        fac = getattr(c.certificado, "factura", None)
+        if fac and getattr(fac, "tipo_cambio", None):
+            try:
+                default_tc = float(fac.tipo_cambio)
+                break
+            except Exception:
+                pass
+    ws["B2"] = default_tc
+    ws["B3"] = ""   # vacío = usa tasa del cliente
+    ws["B4"] = ""   # vacío = usa mínimo del cliente
+
+    start = 6  # fila de encabezados
     headers = [
-        "N° Certificado", "N° Factura", "Cliente", "RUT",
-        "Valor Seguro (USD)", "Valor Prima (USD)", "Valor Factura (CLP)", "Referencia"
+        "N° Certificado","N° Factura","Cliente","RUT",
+        "Valor Seguro (USD)","Valor Prima (USD)","Valor Factura (CLP)","Referencia",
+        "Tasa %","Mínimo USD","Prima USD (calc)","A pagar a SyC (CLP)"
     ]
-    ws.append(headers)
+    for col, h in enumerate(headers, 1):
+        cell = ws.cell(row=start, column=col, value=h)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center")
 
-    for col in range(1, len(headers)+1):
-        ws.cell(row=1, column=col).font = Font(bold=True)
-        ws.cell(row=1, column=col).alignment = Alignment(horizontal="center")
-
-    for cobro in cobranzas:
+    r = start + 1
+    for cobro in qs:
         cert = cobro.certificado
-        factura = cert.factura
-        cliente = cert.cliente
+        fac  = cert.factura
+        cli  = cert.cliente
 
-        ws.append([
-            f"C-{cert.id}",
-            factura.numero if factura else "",
-            cliente.nombre,
-            cliente.rut,
-            float(cobro.monto_asegurado or 0),
-            float(cobro.valor_prima_cobro or 0),
-            float(factura.valor_clp) if factura and factura.valor_clp else 0,
-            cert.notas.referencia if cert.notas and cert.notas.referencia else "",
-        ])
+        # columnas base
+        ws.cell(row=r, column=1).value = f"C-{cert.id}"
+        ws.cell(row=r, column=2).value = fac.numero if fac else ""
+        ws.cell(row=r, column=3).value = cli.nombre
+        ws.cell(row=r, column=4).value = cli.rut
+        ws.cell(row=r, column=5).value = float(cobro.monto_asegurado or 0)          # Valor Seguro USD
+        ws.cell(row=r, column=6).value = float(cobro.valor_prima_cobro or 0)        # Prima USD guardada
+        ws.cell(row=r, column=7).value = float(fac.valor_clp) if fac and fac.valor_clp else 0  # CLP contable
+        ws.cell(row=r, column=8).value = cert.notas.referencia if getattr(cert, "notas", None) and cert.notas.referencia else ""
 
-    # Ajustar tamaño de columnas
-    for i, col in enumerate(headers, 1):
-        ws.column_dimensions[get_column_letter(i)].width = 20
+        # tasa/minimo del cliente (ajusta nombres si en tu modelo son otros)
+        tasa_cli   = float(getattr(cli, "tasa", 0) or 0)
+        minimo_cli = float(getattr(cli, "minimo", 0) or 0)
+        ws.cell(row=r, column=9).value  = tasa_cli
+        ws.cell(row=r, column=10).value = minimo_cli
 
-    # Respuesta HTTP
+        # K: Prima USD (calc) = MAX(E*r/100, min) usando overrides si los pones
+        ws.cell(row=r, column=11).value = (
+            f'=ROUND(MAX(E{r}*IF($B$3<>"",$B$3,I{r})/100, IF($B$4<>"",$B$4,J{r})), 2)'
+        )
+        # L: A pagar a SyC (CLP) = Prima USD (calc) * TC reporte
+        ws.cell(row=r, column=12).value = f'=ROUND(K{r}*$B$2, 0)'
+
+        r += 1
+
+    # formatos
+    for row in ws.iter_rows(min_row=start+1, max_row=r-1, min_col=5, max_col=12):
+        for idx, cell in enumerate(row, start=5):
+            if idx in (5, 6, 11):  # USD
+                cell.number_format = '#,##0.00'
+            if idx in (7, 12):     # CLP
+                cell.number_format = '#,##0'
+
+    # anchos
+    widths = [16,16,28,14,18,18,20,18,10,12,16,18]
+    for i, w in enumerate(widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    # congelar encabezados / auto-filtro
+    ws.freeze_panes = ws["A7"]
+    ws.auto_filter.ref = f"A{start}:L{r-1}"
+
+    # respuesta
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
@@ -1958,12 +2196,40 @@ def test_envio_certificado_real(request):
         return HttpResponse(f"❌ Error al enviar correo de prueba: {str(e)}")
 @csrf_exempt
 def buscar_puertos_api_externa(request):
-    term = request.GET.get('term', '').strip()
-
+    term = (request.GET.get('term') or '').strip()
     if not term:
         return JsonResponse({'error': 'Término de búsqueda no proporcionado'}, status=400)
 
-    api_url = f'https://igi.nsure.net/api/seaports/search/term/{term}'
+    # Opcionales para filtrar por país
+    pais = (request.GET.get('pais') or '').strip()
+    pais_code = (request.GET.get('pais_code') or '').strip()
+    try:
+        limit = int(request.GET.get('limit', 25))
+    except ValueError:
+        limit = 25
+
+    # Normalización a ISO-2 (alias típicos para EE.UU.)
+    aliases = {
+        'united states': 'US',
+        'united states of america': 'US',
+        'usa': 'US',
+        'u.s.': 'US',
+        'u.s.a.': 'US',
+    }
+    iso2 = (pais_code.upper() if len(pais_code) == 2 else '') or aliases.get(pais.lower(), '')
+    if not iso2 and len(pais) == 2:
+        iso2 = pais.upper()
+
+    # Conjunto de nombres aceptados para el filtro por nombre de país
+    accepted_country_names = set()
+    if pais:
+        accepted_country_names.add(pais)
+    if iso2 == 'US':
+        accepted_country_names.update([
+            'United States', 'United States of America', 'USA', 'U.S.', 'U.S.A.'
+        ])
+
+    api_url = f'https://igi.nsure.net/api/seaports/search/term/{quote(term)}'
     headers = {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -1971,10 +2237,33 @@ def buscar_puertos_api_externa(request):
     }
 
     try:
-        response = requests.get(api_url, headers=headers)
-        response.raise_for_status()  # Lanza excepción si status != 200
+        resp = requests.get(api_url, headers=headers, timeout=12)
+        resp.raise_for_status()
+        data = resp.json()
 
-        return JsonResponse(response.json(), safe=False)
+        # La API suele devolver una lista; si viniera envuelta, intenta sacar "results"
+        items = data if isinstance(data, list) else data.get('results', [])
+
+        # Filtro por país (si recibimos pais/pais_code)
+        def matches_country(item):
+            if not iso2 and not accepted_country_names:
+                return True  # no hay filtro de país
+            code = (item.get('countryCode') or item.get('country_code') or item.get('country') or '').strip()
+            name = (item.get('countryName') or item.get('country_name') or item.get('country') or '').strip()
+            if iso2 and code.upper() == iso2:
+                return True
+            if name and any(name.lower() == n.lower() for n in accepted_country_names):
+                return True
+            return False
+
+        filtered = [it for it in items if matches_country(it)]
+
+        # Fallback: si el filtro dejó cero y sí había resultados, entrega lo original (mejor UX)
+        out = filtered if (filtered or not items) else items
+        if limit and isinstance(out, list):
+            out = out[:limit]
+
+        return JsonResponse(out, safe=False)
     except requests.exceptions.RequestException as e:
         return JsonResponse({'error': 'No se pudo obtener la información', 'detalle': str(e)}, status=500)
 

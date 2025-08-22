@@ -4,6 +4,7 @@
 
 {% block content %}
 <style>
+  /* ======== Cabecera tabla ======== */
   table thead th {
     background: #f0f2f5;
     font-size: .75rem;
@@ -18,6 +19,76 @@
     border-top-width: 1px;
     font-family: "Inter Var", Inter, -apple-system, BlinkMacSystemFont, "San Francisco", "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
   }
+
+  /* ======== Estética y ritmo ======== */
+  .table tbody tr:nth-child(odd){ background: #fcfdff; }
+  .cell-ellipsis{
+    max-width: 36ch; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .text-num{ font-variant-numeric: tabular-nums; text-align: right; }
+  .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+
+  /* ======== Sticky header / columnas ======== */
+  .table-sticky thead th{ position: sticky; top: 0; z-index: 3; }
+  /* primera col: checkbox + razón social (2 columnas) */
+  .sticky-left-0 { position: sticky; left: 0; background: #fff; z-index: 2; }
+  .sticky-left-1 { position: sticky; left: 3.2rem; background: #fff; z-index: 2; } /* 52px aprox para checkbox */
+  .sticky-right { position: sticky; right: 0; background: #fff; z-index: 2; }
+
+  /* ======== Densidad ======== */
+  .density-comfortable tbody tr > * { padding-top: .9rem; padding-bottom: .9rem; }
+  .density-medium tbody tr > * { padding-top: .6rem; padding-bottom: .6rem; }
+  .density-compact tbody tr > * { padding-top: .35rem; padding-bottom: .35rem; font-size: .9rem; }
+
+  /* ======== Ordenamiento (indicadores) ======== */
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable .sort-ind { margin-left: .25rem; opacity: .5; }
+  th[aria-sort="ascending"] .sort-ind { transform: rotate(180deg); opacity: 1; }
+  th[aria-sort="descending"] .sort-ind { opacity: 1; }
+
+  /* ======== Fila de detalles ======== */
+  tr.details-row { background: #fbfbfe; }
+  .detail-grid{
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0,1fr));
+    gap: .75rem 1rem;
+  }
+  .detail-item small{ color:#667085; display:block; }
+  @media (max-width: 992px){
+    .detail-grid{ grid-template-columns: repeat(2, minmax(0,1fr)); }
+    .cell-ellipsis{ max-width: 24ch; }
+  }
+  @media (max-width: 576px){
+    .detail-grid{ grid-template-columns: 1fr; }
+  }
+
+  /* ======== Barra de selección masiva ======== */
+  .bulkbar{
+    position: sticky;
+    bottom: 0; z-index: 4;
+    background: #0b1324;
+    color: #fff;
+    padding: .5rem .75rem;
+    border-radius: .5rem;
+    display: none;
+    align-items: center; justify-content: space-between; gap: .5rem;
+    box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  }
+  .bulkbar.show{ display: flex; }
+
+  /* ======== Dropdown columnas ======== */
+  .columns-dropdown .form-check{ min-width: 200px; }
+
+  /* ======== Tooltips simples ======== */
+  .tooltip-ellipsis[title]{ border-bottom: 1px dashed #cbd5e1; cursor: help; }
+
+  /* ======== Badges ======== */
+  .badge-soft{
+    background: #eef2ff; color: #4338ca; font-weight: 600;
+  }
+  .badge-soft.success{ background:#ecfdf5; color:#047857; }
+  .badge-soft.warning{ background:#fff7ed; color:#c2410c; }
+  .badge-soft.danger{ background:#fef2f2; color:#b91c1c; }
 </style>
 
 <div class="page-wrapper">
@@ -32,19 +103,88 @@
         <div class="col-auto ms-auto d-print-none">
           <div class="btn-list">
             <a href="#" class="btn btn-primary d-none d-sm-inline-block" data-bs-toggle="modal" data-bs-target="#modal-cliente" style="background-color:#009925">
-              <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5l0 14" /><path d="M5 12l14 0" />
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
               Nuevo Cliente
             </a>
             <a href="#" class="btn btn-primary d-sm-none btn-icon" data-bs-toggle="modal" data-bs-target="#modal-cliente" aria-label="Crear cliente">
-              <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 5l0 14" /><path d="M5 12l14 0" />
-              </svg>
+              <svg xmlns="http://www.w3.org/2000/svg" class="icon icon-2" width="24" height="24" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5l0 14" /><path d="M5 12l14 0" /></svg>
             </a>
           </div>
         </div>
       </div>
+
+      <!-- Toolbar: búsqueda, chips, métricas, selector de columnas, densidad -->
+      <div class="row mt-3 g-2 align-items-center">
+        <div class="col-12 col-lg">
+          <div class="input-icon">
+            <span class="input-icon-addon">
+              <svg xmlns="http://www.w3.org/2000/svg" class="icon" width="20" height="20" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="7"/><path d="M21 21l-6-6"/></svg>
+            </span>
+            <input id="tableSearch" type="text" class="form-control" placeholder="Buscar por nombre, RUT, ciudad, región… (admite filtros: region:Biobío tipo:empresa estado:activo)">
+          </div>
+          <div class="d-flex gap-2 flex-wrap mt-2" id="quickFilters">
+            <button class="btn btn-outline-secondary btn-sm" data-filter="estado:activo">Activos</button>
+            <button class="btn btn-outline-secondary btn-sm" data-filter="tipo:empresa">Empresas</button>
+            <button class="btn btn-outline-secondary btn-sm" data-filter="tipo:persona">Personas</button>
+            <button class="btn btn-outline-secondary btn-sm" data-filter="region:Metropolitana">RM</button>
+            <button class="btn btn-outline-secondary btn-sm" data-filter="tasa_congelada:si">Tasa congelada</button>
+          </div>
+        </div>
+        <div class="col-12 col-md-auto d-flex gap-2 align-items-center">
+          <div class="dropdown columns-dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+              Mostrar columnas
+            </button>
+            <div class="dropdown-menu p-2">
+              <label class="form-check">
+                <input class="form-check-input col-toggle" type="checkbox" data-col="rut" checked>
+                <span class="form-check-label">RUT</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input col-toggle" type="checkbox" data-col="ciudad" checked>
+                <span class="form-check-label">Ciudad</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input col-toggle" type="checkbox" data-col="region" checked>
+                <span class="form-check-label">Región</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input col-toggle" type="checkbox" data-col="estado" checked>
+                <span class="form-check-label">Estado</span>
+              </label>
+              <label class="form-check">
+                <input class="form-check-input col-toggle" type="checkbox" data-col="tipo" checked>
+                <span class="form-check-label">Tipo</span>
+              </label>
+            </div>
+          </div>
+          <div class="dropdown">
+            <button class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+              Densidad
+            </button>
+            <div class="dropdown-menu">
+              <button class="dropdown-item density-opt" data-density="comfortable">Cómoda</button>
+              <button class="dropdown-item density-opt" data-density="medium">Media</button>
+              <button class="dropdown-item density-opt" data-density="compact">Compacta</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Métricas -->
+      <div class="row mt-3" id="metricsRow" style="display:none;">
+        <div class="col-12">
+          <div class="card">
+            <div class="card-body d-flex flex-wrap gap-3">
+              <div><strong>Total clientes:</strong> <span id="m_total">0</span></div>
+              <div><strong>% activos:</strong> <span id="m_activos">0%</span></div>
+              <div><strong>Tasa promedio:</strong> <span id="m_tasa">0%</span></div>
+              <div><strong>Mínimo promedio:</strong> <span id="m_minimo">$0</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -52,151 +192,213 @@
   <div class="page-body">
     <div class="container-xl">
       <div class="row row-deck row-cards">
-        <div class="container mt-4" id="clientesTable-container" style="overflow-x: auto;">
-          <table id="clientesTable" class="table table-hover table-bordered align-middle text-nowrap">
+        <div class="container mt-2" id="clientesTable-container" style="overflow-x: auto;">
+          <div class="bulkbar mt-2" id="bulkBar">
+            <div><span id="bulkCount">0</span> seleccionados</div>
+            <div class="d-flex gap-2">
+              <button class="btn btn-sm btn-outline-light" id="bulkExport">Exportar</button>
+              <button class="btn btn-sm btn-outline-light" id="bulkActivate">Marcar Activo</button>
+              <button class="btn btn-sm btn-danger" id="bulkDelete">Eliminar</button>
+            </div>
+          </div>
+
+          <table id="clientesTable" class="table table-hover table-bordered align-middle text-nowrap table-sticky density-medium">
             <thead>
               <tr>
-                <th>Razón Social</th>
-                <th>RUT</th>
-                <th>Dirección</th>
-                <th>País</th>
-                <th>Ciudad</th>
-                <th>Región</th>
-                <th>Tasa</th>
-                <th>Tasa Congelada</th>
-                <th>Valor Mínimo</th>
-                <th>Valor Mínimo Congelado</th>
-                <th>Estado</th>
-                <th>Tramo Cobro</th>
-                <th>Tipo Cliente</th>
-                <th>Acciones</th>
+                <th class="sticky-left-0" scope="col" style="width:52px">
+                  <input id="selectAll" type="checkbox" aria-label="Seleccionar todos">
+                </th>
+                <th class="sticky-left-1 sortable" data-key="nombre" scope="col" aria-sort="none">
+                  Razón Social <span class="sort-ind">▾</span>
+                </th>
+                <th class="sortable th-col" data-key="rut" data-col="rut" scope="col" aria-sort="none">RUT <span class="sort-ind">▾</span></th>
+                <th class="sortable th-col" data-key="ciudad" data-col="ciudad" scope="col" aria-sort="none">Ciudad <span class="sort-ind">▾</span></th>
+                <th class="sortable th-col" data-key="region" data-col="region" scope="col" aria-sort="none">Región <span class="sort-ind">▾</span></th>
+                <th class="th-col" data-col="estado" scope="col">Estado</th>
+                <th class="sortable th-col" data-key="tipo" data-col="tipo" scope="col" aria-sort="none">Tipo <span class="sort-ind">▾</span></th>
+                <th class="sticky-right" scope="col" style="width:64px">Acciones</th>
               </tr>
             </thead>
             <tbody>
               {% for cliente in clientes %}
-              <tr>
-                <td>{{ cliente.nombre }}</td>
-                <td>{{ cliente.rut }}</td>
-                <td>{{ cliente.direccion }}</td>
-                <td>{{ cliente.pais }}</td>
-                <td>{{ cliente.ciudad }}</td>
-                <td>{{ cliente.region }}</td>
-                <td>{{ cliente.tasa|floatformat:2 }}%</td> {# Muestra 0.2 como 0.20% #}
-                <td>{{ cliente.tasa_congelada|floatformat:2 }}%</td> {# Muestra 0.2 como 0.20% #}
-                <td>${{ cliente.valor_minimo|floatformat:2|intcomma }}</td> {# Muestra 1000.00 como $1,000.00 #}
-                <td>${{ cliente.valor_minimo_congelado|floatformat:2|intcomma }}</td> {# Muestra 1000.00 como $1,000.00 #}
-                <td><span class="badge bg-success">Activo</span></td>
-                <td>{{ cliente.tramo_cobro }}</td>
-                <td>{{ cliente.tipo_cliente }}</td>
-                <td>
-  <button class="btn btn-sm btn-warning editar-btn" 
-          data-id="{{ cliente.id }}"
-          data-nombre="{{ cliente.nombre }}"
-          data-rut="{{ cliente.rut }}"
-        
-          data-direccion="{{ cliente.direccion }}"
-          data-pais="{{ cliente.pais }}"
-          data-ciudad="{{ cliente.ciudad }}"
-          data-region="{{ cliente.region }}"
-          data-codigo_postal="{{ cliente.codigo_postal }}"
-          data-tasa="{{ cliente.tasa }}"
-          data-tasa_congelada="{{ cliente.tasa_congelada }}"
-          data-valor_minimo="{{ cliente.valor_minimo }}"
-          data-valor_minimo_congelado="{{ cliente.valor_minimo_congelado }}"
-          data-tramo_cobro="{{ cliente.tramo_cobro }}"
-          data-tipo_cliente="{{ cliente.tipo_cliente }}"
-          data-bs-toggle="modal" data-bs-target="#modal-cliente">
-    Editar
-  </button>
-
-  <button class="btn btn-sm btn-danger eliminar-btn" 
-          data-id="{{ cliente.id }}">
-    Eliminar
-  </button>
-</td>
+              {# Datos “secundarios” quedan en data-* para detalle y filtros #}
+              <tr class="cliente-row"
+                  data-id="{{ cliente.id }}"
+                  data-nombre="{{ cliente.nombre|escape }}"
+                  data-rut="{{ cliente.rut|escape }}"
+                  data-direccion="{{ cliente.direccion|default_if_none:''|escape }}"
+                  data-pais="{{ cliente.pais|default_if_none:''|escape }}"
+                  data-ciudad="{{ cliente.ciudad|default_if_none:''|escape }}"
+                  data-region="{{ cliente.region|default_if_none:''|escape }}"
+                  data-tasa="{{ cliente.tasa|default_if_none:0 }}"
+                  data-tasa_congelada="{{ cliente.tasa_congelada|default_if_none:0 }}"
+                  data-valor_minimo="{{ cliente.valor_minimo|default_if_none:0 }}"
+                  data-valor_minimo_congelado="{{ cliente.valor_minimo_congelado|default_if_none:0 }}"
+                  data-tramo_cobro="{{ cliente.tramo_cobro|default_if_none:''|escape }}"
+                  data-tipo="{{ cliente.tipo_cliente|default_if_none:''|escape }}"
+                  data-estado="{{ cliente.estado|default_if_none:'activo'|escape }}"
+              >
+                <td class="sticky-left-0">
+                  <input type="checkbox" class="row-select" aria-label="Seleccionar fila">
+                </td>
+                <td class="sticky-left-1">
+                  <button class="btn btn-link p-0 toggle-details" aria-expanded="false" aria-label="Mostrar detalles">
+                    ▶
+                  </button>
+                  <span class="cell-ellipsis tooltip-ellipsis" title="{{ cliente.nombre }}">{{ cliente.nombre }}</span>
+                </td>
+                <td class="th-col mono" data-col="rut">{{ cliente.rut }}</td>
+                <td class="th-col" data-col="ciudad">{{ cliente.ciudad }}</td>
+                <td class="th-col" data-col="region">{{ cliente.region }}</td>
+                <td class="th-col" data-col="estado">
+                  {# Si no tienes estado en modelo, cae en 'activo' por defecto #}
+                  {% with estado=cliente.estado|default_if_none:'activo' %}
+                  <span class="badge badge-soft {% if estado|lower == 'activo' %}success{% elif estado|lower == 'inactivo' %}danger{% else %}warning{% endif %}">
+                    {{ estado|capfirst }}
+                  </span>
+                  {% endwith %}
+                </td>
+                <td class="th-col" data-col="tipo">
+                  <span class="badge badge-soft">{{ cliente.tipo_cliente|capfirst }}</span>
+                </td>
+                <td class="sticky-right">
+                  <div class="dropdown">
+                    <button class="btn btn-sm btn-ghost" data-bs-toggle="dropdown" aria-label="Acciones">⋮</button>
+                    <div class="dropdown-menu dropdown-menu-end">
+                      <button class="dropdown-item ver-detalle">Ver detalle</button>
+                      <button class="dropdown-item editar-btn"
+                        data-id="{{ cliente.id }}"
+                        data-nombre="{{ cliente.nombre }}"
+                        data-rut="{{ cliente.rut }}"
+                        data-direccion="{{ cliente.direccion }}"
+                        data-pais="{{ cliente.pais }}"
+                        data-ciudad="{{ cliente.ciudad }}"
+                        data-region="{{ cliente.region }}"
+                        data-codigo_postal="{{ cliente.codigo_postal }}"
+                        data-tasa="{{ cliente.tasa }}"
+                        data-tasa_congelada="{{ cliente.tasa_congelada }}"
+                        data-valor_minimo="{{ cliente.valor_minimo }}"
+                        data-valor_minimo_congelado="{{ cliente.valor_minimo_congelado }}"
+                        data-tramo_cobro="{{ cliente.tramo_cobro }}"
+                        data-tipo_cliente="{{ cliente.tipo_cliente }}"
+                        data-bs-toggle="modal" data-bs-target="#modal-cliente">
+                        Editar
+                      </button>
+                      <button class="dropdown-item text-danger eliminar-btn" data-id="{{ cliente.id }}">Eliminar</button>
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              <tr class="details-row" style="display:none;">
+                <td></td>
+                <td colspan="6">
+                  <div class="detail-grid">
+                    <div class="detail-item">
+                      <small>Dirección</small>
+                      <div class="cell-ellipsis tooltip-ellipsis">{{ cliente.direccion }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>País</small>
+                      <div>{{ cliente.pais }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Tramo de Cobro</small>
+                      <div>{{ cliente.tramo_cobro }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Tipo Cliente</small>
+                      <div>{{ cliente.tipo_cliente|capfirst }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Tasa</small>
+                      <div class="text-num">{{ cliente.tasa|floatformat:2 }}%</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Tasa Congelada</small>
+                      <div class="text-num">{{ cliente.tasa_congelada|floatformat:2 }}%</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Valor Mínimo</small>
+                      <div class="text-num">${{ cliente.valor_minimo|floatformat:2|intcomma }}</div>
+                    </div>
+                    <div class="detail-item">
+                      <small>Valor Mínimo Congelado</small>
+                      <div class="text-num">${{ cliente.valor_minimo_congelado|floatformat:2|intcomma }}</div>
+                    </div>
+                  </div>
+                </td>
+                <td></td>
               </tr>
               {% endfor %}
             </tbody>
           </table>
+
+          <!-- Paginación simple (cliente) -->
+          <div class="d-flex justify-content-between align-items-center mt-2" id="pager" style="display:none;">
+            <div class="text-secondary small">Mostrando <span id="pageFrom">0</span>–<span id="pageTo">0</span> de <span id="pageTotal">0</span></div>
+            <div class="btn-group">
+              <button class="btn btn-outline-secondary btn-sm" id="prevPage">Anterior</button>
+              <button class="btn btn-outline-secondary btn-sm" id="nextPage">Siguiente</button>
+            </div>
+            <div>
+              <select id="pageSize" class="form-select form-select-sm" style="width:auto;">
+                <option value="25">25 por página</option>
+                <option value="50" selected>50 por página</option>
+                <option value="100">100 por página</option>
+              </select>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
 
-
 </div>
 
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+    /* =========================================
+       FORM: CREAR/EDITAR (tú código original)
+    ==========================================*/
     const form = document.getElementById("form-cliente");
-
     let enviado = false;
+    if (form){
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (enviado) return; // evita doble envío
+        enviado = true;
 
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
+        const formData = new FormData(form);
 
-      if (enviado) return; // evita doble envío
-      enviado = true;
-
-      const formData = new FormData(form);
-
-      fetch("{% url 'form_cliente' %}", {
-        method: "POST",
-        headers: {
-          "X-CSRFToken": getCookie("csrftoken"),
-          "X-Requested-With": "XMLHttpRequest"
-        },
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => {
-        enviado = false; // permitir reenviar si es necesario
-
-        if (data.success) {
-          Swal.fire({
-            icon: 'success',
-            title: 'Cliente creado',
-            text: 'El cliente ha sido creado correctamente.'
-          }).then(() => {
-            location.reload();
-          });
-        } else if (data.duplicate) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'RUT duplicado',
-            text: 'Ya existe un cliente con ese RUT.'
-          });
-        } else if (data.duplicate_nombre) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Nombre duplicado',
-            text: 'Ya existe un cliente con ese nombre.'
-          });
-        } else if (data.duplicate_nombre) {
-          Swal.fire({
-            icon: 'warning',
-            title: 'Nombre duplicado',
-            text: 'Ya existe un cliente con ese nombre.'
-          });
-        } else {
-          Swal.fire({
-            icon: 'error',
-            title: 'Error',
-            text: 'Revisa los campos del formulario.'
-          });
-        }
-      })
-      .catch(err => {
-        enviado = false;
-        console.error("Error:", err);
-        Swal.fire({
-          icon: 'error',
-          title: 'Error inesperado',
-          text: 'No se pudo enviar el formulario.'
+        fetch("{% url 'form_cliente' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": getCookie("csrftoken"),
+            "X-Requested-With": "XMLHttpRequest"
+          },
+          body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+          enviado = false; // permitir reenviar si es necesario
+          if (data.success) {
+            Swal.fire({ icon: 'success', title: 'Cliente creado', text: 'El cliente ha sido creado correctamente.' })
+              .then(() => location.reload());
+          } else if (data.duplicate) {
+            Swal.fire({ icon: 'warning', title: 'RUT duplicado', text: 'Ya existe un cliente con ese RUT.' });
+          } else if (data.duplicate_nombre) {
+            Swal.fire({ icon: 'warning', title: 'Nombre duplicado', text: 'Ya existe un cliente con ese nombre.' });
+          } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'Revisa los campos del formulario.' });
+          }
+        })
+        .catch(err => {
+          enviado = false;
+          console.error("Error:", err);
+          Swal.fire({ icon: 'error', title: 'Error inesperado', text: 'No se pudo enviar el formulario.' });
         });
       });
-    });
-
+    }
 
     // Editar cliente: llenar modal
     document.querySelectorAll('.editar-btn').forEach(button => {
@@ -216,7 +418,6 @@ document.addEventListener("DOMContentLoaded", function () {
             document.getElementById('tramo_cobro').value = this.dataset.tramo_cobro;
             document.getElementById('tipo_empresa').checked = this.dataset.tipo_cliente === "empresa";
             document.getElementById('tipo_persona').checked = this.dataset.tipo_cliente === "persona";
-
             document.getElementById('modalClienteLabel').textContent = "Editar Cliente";
         });
     });
@@ -252,7 +453,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (document.cookie && document.cookie !== '') {
             const cookies = document.cookie.split(';');
             for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
+                let cookie = cookies[i].trim();
                 if (cookie.substring(0, name.length + 1) === (name + '=')) {
                     cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
                     break;
@@ -261,64 +462,378 @@ document.addEventListener("DOMContentLoaded", function () {
         }
         return cookieValue;
     }
+
+    /* =========================================
+       MEJORAS DE TABLA
+    ==========================================*/
+    const table = document.getElementById('clientesTable');
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr.cliente-row'));
+    const detailsRows = Array.from(tbody.querySelectorAll('tr.details-row'));
+    const searchInput = document.getElementById('tableSearch');
+    const quickFilters = document.getElementById('quickFilters');
+    const selectAll = document.getElementById('selectAll');
+    const bulkBar = document.getElementById('bulkBar');
+    const bulkCount = document.getElementById('bulkCount');
+    const bulkExport = document.getElementById('bulkExport');
+    const bulkActivate = document.getElementById('bulkActivate');
+    const bulkDelete = document.getElementById('bulkDelete');
+    const colToggles = document.querySelectorAll('.col-toggle');
+    const densityOpts = document.querySelectorAll('.density-opt');
+    const pager = document.getElementById('pager');
+    const pageFrom = document.getElementById('pageFrom');
+    const pageTo = document.getElementById('pageTo');
+    const pageTotal = document.getElementById('pageTotal');
+    const pageSizeSel = document.getElementById('pageSize');
+    const metricsRow = document.getElementById('metricsRow');
+
+    // ====== Persistencia clave (columnas/densidad) ======
+    const LS_COLS_KEY = 'clientes_table_cols';
+    const LS_DENSITY_KEY = 'clientes_table_density';
+
+    // ====== Densidad ======
+    const tableClassList = table.classList;
+    function applyDensity(value){
+      tableClassList.remove('density-comfortable','density-medium','density-compact');
+      tableClassList.add(`density-${value}`);
+      localStorage.setItem(LS_DENSITY_KEY, value);
+    }
+    // init density
+    applyDensity(localStorage.getItem(LS_DENSITY_KEY) || 'medium');
+    densityOpts.forEach(btn=>{
+      btn.addEventListener('click', ()=> applyDensity(btn.dataset.density));
+    });
+
+    // ====== Selector de columnas ======
+    function loadColsPrefs(){
+      const saved = localStorage.getItem(LS_COLS_KEY);
+      if(!saved) return;
+      const visible = JSON.parse(saved);
+      colToggles.forEach(tg=>{
+        const col = tg.dataset.col;
+        const isOn = visible[col] !== false; // default true
+        tg.checked = isOn;
+        toggleColumn(col, isOn);
+      });
+    }
+    function persistColsPrefs(){
+      const prefs = {};
+      colToggles.forEach(tg => prefs[tg.dataset.col] = tg.checked);
+      localStorage.setItem(LS_COLS_KEY, JSON.stringify(prefs));
+    }
+    function toggleColumn(colKey, show){
+      const ths = table.querySelectorAll(`th.th-col[data-col="${colKey}"]`);
+      const tds = table.querySelectorAll(`td.th-col[data-col="${colKey}"]`);
+      ths.forEach(el=> el.style.display = show ? '' : 'none');
+      tds.forEach(el=> el.style.display = show ? '' : 'none');
+    }
+    colToggles.forEach(tg=>{
+      tg.addEventListener('change', ()=>{
+        toggleColumn(tg.dataset.col, tg.checked);
+        persistColsPrefs();
+      });
+    });
+    loadColsPrefs();
+
+    // ====== Ordenamiento simple ======
+    const getCellValue = (tr, key) => {
+      if(key==='nombre') return (tr.dataset.nombre || '').toLowerCase();
+      if(key==='rut') return (tr.dataset.rut || '').toLowerCase();
+      if(key==='ciudad') return (tr.dataset.ciudad || '').toLowerCase();
+      if(key==='region') return (tr.dataset.region || '').toLowerCase();
+      if(key==='tipo') return (tr.dataset.tipo || '').toLowerCase();
+      return '';
+    };
+    let sortState = { key: null, dir: 'asc' };
+    table.querySelectorAll('th.sortable').forEach(th=>{
+      th.addEventListener('click', ()=>{
+        const key = th.dataset.key;
+        const newDir = (sortState.key===key && sortState.dir==='asc') ? 'desc':'asc';
+        sortState = { key, dir: newDir };
+        // aria-sort
+        table.querySelectorAll('th.sortable').forEach(x=> x.setAttribute('aria-sort','none'));
+        th.setAttribute('aria-sort', newDir==='asc'?'ascending':'descending');
+        // ordenar
+        rows.sort((a,b)=>{
+          const va = getCellValue(a, key);
+          const vb = getCellValue(b, key);
+          if(va<vb) return newDir==='asc'?-1:1;
+          if(va>vb) return newDir==='asc'?1:-1;
+          return 0;
+        });
+        redraw();
+      });
+    });
+
+    // ====== Búsqueda + filtros (tokenizados) ======
+    let activeQuery = '';
+    let activeTokens = {}; // { region:'Biobío', tipo:'empresa', estado:'activo', tasa_congelada:'si' }
+
+    function parseQuery(q){
+      const tokens = {};
+      const parts = q.split(/\s+/).filter(Boolean);
+      const free = [];
+      parts.forEach(p=>{
+        const m = p.match(/^(\w+):(.+)$/);
+        if(m){
+          tokens[m[1].toLowerCase()] = m[2];
+        }else{
+          free.push(p);
+        }
+      });
+      return { tokens, free: free.join(' ') };
+    }
+
+    function matchRow(tr, parsed){
+      const txt = (tr.dataset.nombre+' '+tr.dataset.rut+' '+tr.dataset.ciudad+' '+tr.dataset.region+' '+tr.dataset.tipo).toLowerCase();
+      // texto libre
+      if(parsed.free && !txt.includes(parsed.free.toLowerCase())) return false;
+      // tokens
+      for(const [k,v] of Object.entries(parsed.tokens)){
+        const val = (tr.dataset[k]||'').toString().toLowerCase();
+        if(k==='tasa_congelada'){ // admitir si > 0
+          const has = parseFloat(tr.dataset.tasa_congelada||0) > 0;
+          const want = (v.toLowerCase()==='si' || v==='1' || v==='true');
+          if(has !== want) return false;
+        }else if(!val.includes(v.toLowerCase())){
+          return false;
+        }
+      }
+      return true;
+    }
+
+    function applyFilter(){
+      const parsed = parseQuery(activeQuery);
+      let visibleCount=0;
+      rows.forEach((tr,i)=>{
+        const ok = matchRow(tr, parsed);
+        const details = detailsRows[i];
+        tr.style.display = ok ? '' : 'none';
+        if(details) details.style.display = (ok && details.dataset.open==='1') ? '' : 'none';
+        if(ok) visibleCount++;
+      });
+      // paginación recalculada
+      currentPage = 1;
+      totalRows = visibleCount;
+      updatePager();
+      redraw();
+    }
+
+    searchInput.addEventListener('input', e=>{
+      activeQuery = e.target.value.trim();
+      applyFilter();
+    });
+
+    quickFilters.querySelectorAll('button[data-filter]').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const token = btn.getAttribute('data-filter');
+        if(activeQuery.includes(token)) return;
+        activeQuery = (activeQuery ? activeQuery + ' ' : '') + token;
+        searchInput.value = activeQuery;
+        applyFilter();
+      });
+    });
+
+    // ====== Fila de detalles (toggle) ======
+    tbody.querySelectorAll('.toggle-details').forEach((btn, idx)=>{
+      btn.addEventListener('click', ()=>{
+        const row = rows[idx];
+        const details = detailsRows[idx];
+        const open = details.style.display !== 'none';
+        details.style.display = open ? 'none' : '';
+        details.dataset.open = open ? '0' : '1';
+        btn.setAttribute('aria-expanded', !open);
+        btn.textContent = open ? '▶' : '▼';
+      });
+    });
+    // “Ver detalle” desde el menú
+    tbody.querySelectorAll('.ver-detalle').forEach((btn, idx)=>{
+      btn.addEventListener('click', ()=>{
+        const toggleBtn = rows[idx].querySelector('.toggle-details');
+        if(toggleBtn) toggleBtn.click();
+      });
+    });
+
+    // ====== Selección masiva ======
+    function updateBulkBar(){
+      const selected = tbody.querySelectorAll('.row-select:checked');
+      bulkCount.textContent = selected.length;
+      bulkBar.classList.toggle('show', selected.length>0);
+    }
+    selectAll.addEventListener('change', ()=>{
+      tbody.querySelectorAll('.row-select').forEach(cb=>{ if(cb.closest('tr').style.display!=='none') cb.checked = selectAll.checked; });
+      updateBulkBar();
+    });
+    tbody.querySelectorAll('.row-select').forEach(cb=> cb.addEventListener('change', updateBulkBar));
+
+    bulkExport.addEventListener('click', ()=>{
+      const ids = getSelectedIds();
+      if(!ids.length) return;
+      // Ejemplo: descargar CSV cliente
+      const csv = makeCSV(ids);
+      const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'clientes_seleccionados.csv';
+      a.click();
+    });
+    bulkActivate.addEventListener('click', ()=>{
+      const ids = getSelectedIds();
+      if(!ids.length) return;
+      alert('Aquí llamarías al endpoint para marcar Activo estos IDs: '+ids.join(', '));
+    });
+    bulkDelete.addEventListener('click', ()=>{
+      const ids = getSelectedIds();
+      if(!ids.length) return;
+      if(confirm('¿Eliminar '+ids.length+' clientes? Esta acción no se puede deshacer.')){
+        // Podrías iterar y usar tu endpoint /clientes/{id}/eliminar/
+        alert('Demo: aquí ejecutar la eliminación masiva en backend.');
+      }
+    });
+    function getSelectedIds(){
+      const ids = [];
+      rows.forEach((tr, i)=>{
+        const cb = tr.querySelector('.row-select');
+        if(cb && cb.checked) ids.push(tr.dataset.id);
+      });
+      return ids;
+    }
+    function makeCSV(ids){
+      const headers = ['id','nombre','rut','ciudad','region','tipo','estado','tasa','tasa_congelada','valor_minimo','valor_minimo_congelado'];
+      const lines = [headers.join(',')];
+      rows.forEach(tr=>{
+        if(ids.includes(tr.dataset.id)){
+          const vals = headers.map(h => JSON.stringify((tr.dataset[h]??'').toString().replace(/\n/g,' ').trim()));
+          lines.push(vals.join(','));
+        }
+      });
+      return lines.join('\n');
+    }
+
+    // ====== Paginación (cliente) ======
+    let pageSize = parseInt(pageSizeSel.value,10);
+    let currentPage = 1;
+    let totalRows = rows.filter(r=> r.style.display !== 'none').length;
+
+    function updatePager(){
+      totalRows = rows.filter(r=> r.style.display !== 'none').length;
+      const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+      currentPage = Math.min(currentPage, totalPages);
+      const from = (currentPage-1)*pageSize + 1;
+      const to = Math.min(totalRows, currentPage*pageSize);
+      pageFrom.textContent = totalRows ? from : 0;
+      pageTo.textContent = to;
+      pageTotal.textContent = totalRows;
+      pager.style.display = totalRows > pageSize ? '' : 'none';
+    }
+    function redraw(){
+      let visibleIndex = 0;
+      const start = (currentPage-1)*pageSize;
+      const end = start + pageSize;
+      rows.forEach((tr, i)=>{
+        if(tr.style.display==='none'){ // filtrado
+          detailsRows[i].style.display = 'none';
+          return;
+        }
+        const show = visibleIndex>=start && visibleIndex<end;
+        tr.style.visibility = show ? 'visible' : 'hidden';
+        tr.style.position = show ? '' : 'absolute'; // saca del flujo sin recalcular sticky
+        tr.style.pointerEvents = show ? '' : 'none';
+        const details = detailsRows[i];
+        if(details.dataset.open==='1'){
+          details.style.visibility = show ? 'visible' : 'hidden';
+          details.style.position = show ? '' : 'absolute';
+          details.style.pointerEvents = show ? '' : 'none';
+        }else{
+          details.style.display = 'none';
+        }
+        visibleIndex++;
+      });
+      updatePager();
+    }
+    document.getElementById('prevPage').addEventListener('click', ()=>{ if(currentPage>1){ currentPage--; redraw(); }});
+    document.getElementById('nextPage').addEventListener('click', ()=>{
+      const totalPages = Math.max(1, Math.ceil(totalRows / pageSize));
+      if(currentPage < totalPages){ currentPage++; redraw(); }
+    });
+    pageSizeSel.addEventListener('change', ()=>{
+      pageSize = parseInt(pageSizeSel.value,10);
+      currentPage = 1;
+      redraw();
+    });
+
+    // ====== Métricas (top) ======
+    (function computeMetrics(){
+      if(!rows.length) return;
+      let activos=0, sumaTasa=0, countTasa=0, sumaMin=0, countMin=0;
+      rows.forEach(tr=>{
+        if((tr.dataset.estado||'').toLowerCase()==='activo') activos++;
+        const t = parseFloat(tr.dataset.tasa||'');
+        if(!isNaN(t)){ sumaTasa += t; countTasa++; }
+        const vm = parseFloat(tr.dataset.valor_minimo||'');
+        if(!isNaN(vm)){ sumaMin += vm; countMin++; }
+      });
+      const total = rows.length;
+      document.getElementById('m_total').textContent = total;
+      document.getElementById('m_activos').textContent = total ? Math.round((activos/total)*100)+'%' : '0%';
+      document.getElementById('m_tasa').textContent = countTasa ? (sumaTasa/countTasa).toFixed(2)+'%' : '0%';
+      document.getElementById('m_minimo').textContent = moneyFmt(sumaMin/(countMin||1));
+      metricsRow.style.display = '';
+    })();
+
+    function moneyFmt(n){ try{ return new Intl.NumberFormat('es-CL',{style:'currency',currency:'CLP',maximumFractionDigits:0}).format(n);}catch(e){ return '$'+Math.round(n); } }
+
+    // ====== Inicializaciones ======
+    applyFilter(); // aplica con query vacía
+    updateBulkBar();
+    redraw();
+
+    // ====== Accesibilidad minima ======
+    table.querySelectorAll('th').forEach(th=> th.setAttribute('scope','col'));
 });
 </script>
 
-
-
 <script>
+/* ===========================
+   Chile: país/ciudades/región
+   (tu código original, con tweaks)
+=========================== */
 document.addEventListener("DOMContentLoaded", function () {
   const paisSelect = $("#pais");
   const ciudadSelect = $("#ciudad");
   const regionInput = document.getElementById("region");
   const rutInput = document.getElementById("rut");
   const formCliente = document.getElementById("form-cliente");
-  
-  // ⚡ Cargar países - MODIFICADO para solo Chile
+
+  // ⚡ Cargar países - SOLO Chile
   function cargarPaises() {
     paisSelect.empty().append('<option></option>');
     fetch("/api/paises/")
       .then(res => res.json())
       .then(data => {
-        console.log("Respuesta /api/paises/:", data);
         if (data.paises && data.paises.length > 0) {
-          // 🔥 FILTRAR SOLO CHILE
           const chile = data.paises.find(pais => pais.nombre === "Chile");
           if (chile) {
             const option = new Option(chile.nombre, chile.nombre, false, false);
             paisSelect.append(option);
-            
           }
         }
       })
       .catch(err => console.error("Error cargando países:", err));
   }
-  
-  cargarPaises(); // 🔥 Lo cargamos de una vez
-  
-  // ⚡ Cuando abras el modal: forzar Select2 a "refrescarse"
+  cargarPaises();
+
   $("#modal-cliente").on("shown.bs.modal", function () {
-    // 👉 Destruir select2 para forzar refresco de las opciones
-    if (paisSelect.hasClass("select2-hidden-accessible")) {
-      paisSelect.select2("destroy");
-    }
-    if (ciudadSelect.hasClass("select2-hidden-accessible")) {
-      ciudadSelect.select2("destroy");
-    }
- 
-    // 👉 Resetear ciudad y región - MODIFICADO
+    if (paisSelect.hasClass("select2-hidden-accessible")) { paisSelect.select2("destroy"); }
+    if (ciudadSelect.hasClass("select2-hidden-accessible")) { ciudadSelect.select2("destroy"); }
     ciudadSelect.empty().append('<option></option>').trigger("change.select2");
-    // 🔥 CAMBIAR REGIÓN A SELECT
     if (regionInput && regionInput.tagName === 'INPUT') {
-      // Si aún es input, convertirlo a select
       convertirRegionASelect();
     } else {
-      // Si ya es select, solo resetear
       document.getElementById("region").value = "";
     }
   });
-  
-  // 🔥 NUEVA FUNCIÓN: Convertir región a select
+
   function convertirRegionASelect() {
     const regionContainer = regionInput.parentElement;
     const newSelect = document.createElement('select');
@@ -326,8 +841,6 @@ document.addEventListener("DOMContentLoaded", function () {
     newSelect.name = 'region';
     newSelect.className = 'form-select';
     newSelect.required = true;
-    
-    // Agregar opciones de regiones chilenas
     const regionesChile = [
       { value: "", text: "Seleccionar región" },
       { value: "Arica y Parinacota", text: "Arica y Parinacota" },
@@ -347,26 +860,18 @@ document.addEventListener("DOMContentLoaded", function () {
       { value: "Aysén del General Carlos Ibáñez del Campo", text: "Aysén del General Carlos Ibáñez del Campo" },
       { value: "Magallanes y de la Antártica Chilena", text: "Magallanes y de la Antártica Chilena" }
     ];
-    
     regionesChile.forEach(region => {
       const option = new Option(region.text, region.value);
       newSelect.appendChild(option);
     });
-    
     regionContainer.replaceChild(newSelect, regionInput);
   }
-  
-  // 🔥 Al seleccionar país, cargar ciudades (mantener funcionalidad original)
+
   paisSelect.on("change", function () {
     const paisNombre = $(this).val();
     ciudadSelect.empty().append('<option>Cargando...</option>').trigger("change.select2");
-    
-    // 🔥 RESETEAR REGIÓN
     const regionSelect = document.getElementById("region");
-    if (regionSelect) {
-      regionSelect.value = "";
-    }
-    
+    if (regionSelect) { regionSelect.value = ""; }
     if (paisNombre) {
       fetch("/api/ciudades/", {
         method: "POST",
@@ -394,10 +899,8 @@ document.addEventListener("DOMContentLoaded", function () {
       ciudadSelect.empty().append('<option value="">Selecciona un país primero</option>').trigger("change.select2");
     }
   });
-  
 
-
-  // 📝 CSRF helper
+  // CSRF helper (duplicado para aislamiento de scope)
   function getCookie(name) {
     let cookieValue = null;
     if (document.cookie && document.cookie !== '') {
@@ -412,12 +915,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
     return cookieValue;
   }
-
-  
 });
 </script>
-
-
 
 {% include 'core/modal_crear_cliente.html' %}
 {% endblock %}

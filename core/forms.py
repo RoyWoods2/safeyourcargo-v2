@@ -17,21 +17,50 @@ class ClienteSelectWidget(Select):
             pass  # Si el label no es un objeto cliente, lo ignora (por ejemplo, opción vacía)
         return option
 class ClienteForm(forms.ModelForm):
+    # ✅ recibimos el usuario para validar en el “scope” correcto
+    def __init__(self, *args, **kwargs):
+        self.user = kwargs.pop('user', None)
+        super().__init__(*args, **kwargs)
+
     class Meta:
         model = Cliente
         fields = [
-            'tipo_cliente', 'nombre', 'rut','direccion',
+            'tipo_cliente', 'nombre', 'rut', 'direccion',
             'pais', 'ciudad', 'region',
             'tasa', 'valor_minimo', 'tasa_congelada', 'valor_minimo_congelado',
             'tramo_cobro'
         ]
 
+    # --- Helper: queryset dentro del alcance del usuario ---
+    def _scope_qs(self):
+        qs = Cliente.objects.all()
+        u = self.user
+        if not u or u.is_superuser:
+            return qs
+        # Admin ve sus clientes + clientes de sus revendedores
+        if getattr(u, 'rol', None) == 'Administrador':
+            revendedores = Usuario.objects.filter(creado_por=u)
+            return qs.filter(Q(creado_por=u) | Q(creado_por__in=revendedores))
+        # Usuario normal: solo los suyos
+        return qs.filter(creado_por=u)
+
+    # --- Tus validaciones originales (ajustadas al scope) ---
     def clean_nombre(self):
         nombre = self.cleaned_data['nombre']
         cliente_id = self.instance.pk  # importante para edición
-        if Cliente.objects.exclude(pk=cliente_id).filter(nombre__iexact=nombre).exists():
+        qs = self._scope_qs().exclude(pk=cliente_id)
+        if qs.filter(nombre__iexact=nombre).exists():
             raise forms.ValidationError("Ya existe un cliente con este nombre.")
         return nombre
+
+    # ✅ nueva: valida RUT dentro del scope del usuario (sin tocar formato)
+    def clean_rut(self):
+        rut = (self.cleaned_data.get('rut') or '').strip()
+        cliente_id = self.instance.pk
+        qs = self._scope_qs().exclude(pk=cliente_id)
+        if rut and qs.filter(rut__iexact=rut).exists():
+            raise forms.ValidationError("Ya existe un cliente con este RUT.")
+        return rut
 
     def clean_valor_minimo(self):
         valor = self.cleaned_data.get('valor_minimo', '')
@@ -40,6 +69,7 @@ class ClienteForm(forms.ModelForm):
     def clean_valor_minimo_congelado(self):
         valor = self.cleaned_data.get('valor_minimo_congelado', '')
         return int(str(valor).replace('.', '').replace(',', ''))
+
 
 
 

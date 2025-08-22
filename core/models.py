@@ -53,8 +53,8 @@ class Cliente(models.Model):
     ]
 
     tipo_cliente = models.CharField(max_length=10, choices=TIPO_CLIENTE, default='empresa')
-    nombre = models.CharField(max_length=255, unique=True)
-    rut = models.CharField(max_length=15, unique=True)
+    nombre = models.CharField(max_length=255)
+    rut = models.CharField(max_length=15)
 
     direccion = models.TextField()
     pais = models.CharField(max_length=100)
@@ -68,11 +68,20 @@ class Cliente(models.Model):
     valor_minimo_congelado = models.DecimalField(max_digits=10, decimal_places=4)
 
     tramo_cobro = models.PositiveIntegerField()
-    creado_por = models.ForeignKey(Usuario, null=True, blank=True, on_delete=models.SET_NULL, related_name='clientes_creados')
-
+    creado_por = models.ForeignKey(Usuario, null=True, blank=True,
+                                   on_delete=models.SET_NULL,
+                                   related_name='clientes_creados')
     def __str__(self):
         return self.nombre
-    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['creado_por', 'rut'], name='uniq_owner_rut'),
+            models.UniqueConstraint(fields=['creado_por', 'nombre'], name='uniq_owner_nombre'),
+        ]
+        indexes = [
+            models.Index(fields=['creado_por', 'rut']),
+            models.Index(fields=['creado_por', 'nombre']),
+        ]
 class Pais(models.Model):
     nombre = models.CharField(max_length=100)
     sigla = models.CharField(max_length=10, unique=True)
@@ -439,3 +448,25 @@ class Navio(models.Model):
         verbose_name = "Navío"
         verbose_name_plural = "Navíos"
         ordering = ['nombre']
+        
+        
+class UnlocodeEntry(models.Model):
+    country_code = models.CharField(max_length=2, db_index=True)  # ISO-2, p.ej. "US"
+    locode = models.CharField(max_length=5, db_index=True)        # "USNYC" (sin espacios)
+    name = models.CharField(max_length=200, db_index=True)        # Nombre de la localidad/puerto
+    function = models.CharField(max_length=10, blank=True, null=True)  # cadena con dígitos; '1' = puerto marítimo
+    subdiv = models.CharField(max_length=10, blank=True, null=True)    # SubDiv
+    status = models.CharField(max_length=3, blank=True, null=True)     # Status
+    iata = models.CharField(max_length=3, blank=True, null=True)       # IATA si aplica
+    coordinates = models.CharField(max_length=20, blank=True, null=True)  # formato UN/LOCODE (opcional)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['country_code', 'function']),
+            models.Index(fields=['locode']),
+            models.Index(fields=['name']),
+        ]
+        unique_together = [('country_code', 'locode')]
+
+    def __str__(self):
+        return f"{self.locode} - {self.name}"

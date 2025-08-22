@@ -1,16 +1,30 @@
 {% extends 'core/base.html' %}
+{% load humanize %}
 
 {% block title %}Dashboard - Safe Your Cargo{% endblock %}
 
 {% block content %}
 <div class="container-fluid py-4">
-  <h1 class="mb-4">Dashboard</h1>
+  <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+    <h1 class="m-0">Dashboard</h1>
+
+    <!-- Selector de periodo -->
+    <form class="m-0" method="get">
+      <label class="me-2 small text-muted">Periodo:</label>
+      <select name="days" class="form-select form-select-sm d-inline-block" style="width:auto" onchange="this.form.submit()">
+        <option value="30"  {% if days == 30 %}selected{% endif %}>Últimos 30 días</option>
+        <option value="90"  {% if days == 90 %}selected{% endif %}>Últimos 90 días</option>
+        <option value="180" {% if days == 180 %}selected{% endif %}>Últimos 180 días</option>
+        <option value="0"   {% if days == 0 %}selected{% endif %}>Todo</option>
+      </select>
+    </form>
+  </div>
 
   <div class="row g-4">
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="card-title">Certificados Emitidos</div>
-        <div class="card-number text-primary">{{ total_certificados_sum }}</div>
+        <div class="card-number text-primary">{{ total_certificados_sum|intcomma }}</div>
       </div>
     </div>
 
@@ -18,26 +32,27 @@
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="card-title">Prima Total (USD)</div>
-        <div class="card-number text-warning">${{ total_prima_usd }}</div>
+        <div class="card-number text-warning">${{ total_prima_usd|intcomma }}</div>
       </div>
     </div>
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="card-title">Prima Total (CLP)</div>
-        <div class="card-number text-success">${{ total_prima_clp }}</div>
+        <div class="card-number text-success">${{ total_prima_clp|intcomma }}</div>
       </div>
     </div>
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="card-title">Clientes Activos</div>
-        <div class="card-number text-danger">{{ total_clientes }}</div>
+        <div class="card-number text-danger">{{ total_clientes|intcomma }}</div>
       </div>
     </div>
     {% elif user.rol == "Revendedor" %}
     <div class="col-md-3">
       <div class="card p-3 text-center">
         <div class="card-title">Tus Certificados</div>
-        <div class="card-number text-warning">{{ total_certificados_usuario }}</div>
+        <!-- Usamos total_certificados_sum que ya trae tu vista -->
+        <div class="card-number text-warning">{{ total_certificados_sum|intcomma }}</div>
       </div>
     </div>
     {% endif %}
@@ -48,12 +63,14 @@
       <div class="card p-3">
         <h6 class="mb-3">Certificados por Cliente</h6>
         <div id="certificados-chart" style="height:300px;"></div>
+        <div id="certificados-empty" class="text-muted small" style="display:none;">No hay datos para el periodo seleccionado.</div>
       </div>
     </div>
     <div class="col-md-4">
       <div class="card p-3">
         <h6 class="mb-3">Mapa de Origen</h6>
         <div id="origen-map" style="height:300px;"></div>
+        <div id="origen-empty" class="text-muted small" style="display:none;">Sin datos de origen para este periodo.</div>
       </div>
     </div>
   </div>
@@ -63,76 +80,100 @@
     <div class="col-md-12">
       <div class="card p-3">
         <h6 class="mb-3">Últimos Certificados Emitidos</h6>
-        <table class="table table-sm table-striped">
+        {% if ultimos_certificados %}
+        <table class="table table-sm table-striped align-middle">
           <thead>
             <tr>
               <th>Nº</th>
               <th>Cliente</th>
               <th>País Destino</th>
               <th>Fecha Embarque</th>
-              <th>Prima (USD)</th>
+              <th class="text-end">Prima (USD)</th>
             </tr>
           </thead>
           <tbody>
             {% for cert in ultimos_certificados %}
             <tr>
-              <td>C-{{ cert.id }}</td>
-              <td>{{ cert.cliente.nombre }}</td>
-              <td>{{ cert.ruta.pais_destino }}</td>
-              <td>{{ cert.fecha_partida }}</td>
-              <td>{{ cert.tipo_mercancia.valor_prima }}</td>
+              <td> C-{{ cert.id }} </td>
+              <td> {{ cert.cliente.nombre }} </td>
+              <td> {{ cert.ruta.pais_destino }} </td>
+              <td> {{ cert.fecha_partida|date:"Y-m-d" }} </td>
+              <td class="text-end"> {{ cert.tipo_mercancia.valor_prima|floatformat:0|intcomma }} </td>
             </tr>
             {% endfor %}
           </tbody>
         </table>
+        {% else %}
+          <div class="text-muted small">No hay certificados recientes.</div>
+        {% endif %}
       </div>
     </div>
   </div>
   {% endif %}
 </div>
 
+<!-- Plotly -->
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+
+{# Datos seguros en JSON (evita inyección) #}
+{{ certificados_clientes|json_script:"data_certificados_clientes" }}
+{{ certificados_totales|json_script:"data_certificados_totales" }}
+{{ origen_paises|json_script:"data_origen_paises" }}
+{{ origen_cantidades|json_script:"data_origen_cantidades" }}
+
 <script>
-  const certificadosClientes = {{ certificados_clientes|safe }};
-  const certificadosTotales = {{ certificados_totales|safe }};
-  const origenPaises = {{ origen_paises|safe }};
-  const origenCantidades = {{ origen_cantidades|safe }};
+  const certificadosClientes = JSON.parse(document.getElementById('data_certificados_clientes').textContent || '[]');
+  const certificadosTotales  = JSON.parse(document.getElementById('data_certificados_totales').textContent || '[]');
+  const origenPaises         = JSON.parse(document.getElementById('data_origen_paises').textContent || '[]');
+  const origenCantidades     = JSON.parse(document.getElementById('data_origen_cantidades').textContent || '[]');
 
-  // Gráfico de Certificados por Cliente
-  var certificadosData = {
-    x: certificadosClientes,
-    y: certificadosTotales,
-    type: 'bar',
-    marker: { color: '#007bff' }
-  };
+  // ===== Gráfico: Certificados por Cliente =====
+  (function renderCertificadosChart() {
+    const hasData = Array.isArray(certificadosClientes) && certificadosClientes.length > 0;
+    if (!hasData) {
+      document.getElementById('certificados-chart').style.display = 'none';
+      document.getElementById('certificados-empty').style.display = '';
+      return;
+    }
+    var data = [{
+      x: certificadosClientes,
+      y: certificadosTotales,
+      type: 'bar',
+      marker: { color: '#007bff' }
+    }];
+    var layout = {
+      margin: { t: 20 },
+      yaxis: { title: 'Cantidad de Certificados', zeroline: false },
+      xaxis: { title: 'Cliente', tickangle: -45, automargin: true },
+      plot_bgcolor: '#fff',
+      paper_bgcolor: '#fff'
+    };
+    Plotly.newPlot('certificados-chart', data, layout, {displayModeBar: false});
+  })();
 
-  var certificadosLayout = {
-    margin: { t: 20 },
-    yaxis: { title: 'Cantidad de Certificados' },
-    xaxis: { title: 'Cliente', tickangle: -45, automargin: true },
-    plot_bgcolor: '#fff',
-    paper_bgcolor: '#fff'
-  };
-
-  Plotly.newPlot('certificados-chart', [certificadosData], certificadosLayout);
-
-  // Mapa de Origen
-  var origenData = [{
-    type: 'choropleth',
-    locationmode: 'country names',
-    locations: origenPaises,
-    z: origenCantidades,
-    colorscale: 'Blues',
-    reversescale: true,
-    marker: { line: { color: 'rgb(180,180,180)', width: 0.5 } },
-    colorbar: { title: 'Certificados' }
-  }];
-
-  var origenLayout = {
-    geo: { showframe: false, showcoastlines: false, projection: { type: 'equirectangular' }},
-    margin: { t: 0, b: 0 }
-  };
-
-  Plotly.newPlot('origen-map', origenData, origenLayout);
+  // ===== Mapa: Origen =====
+  (function renderOrigenMap() {
+    const hasData = Array.isArray(origenPaises) && origenPaises.length > 0 && (origenCantidades || []).some(v => Number(v) > 0);
+    if (!hasData) {
+      document.getElementById('origen-map').style.display = 'none';
+      document.getElementById('origen-empty').style.display = '';
+      return;
+    }
+    var data = [{
+      type: 'choropleth',
+      locationmode: 'country names',
+      locations: origenPaises,
+      z: origenCantidades,
+      colorscale: 'Blues',
+      reversescale: true,
+      marker: { line: { color: 'rgb(180,180,180)', width: 0.5 } },
+      colorbar: { title: 'Certificados' }
+    }];
+    var layout = {
+      geo: { showframe: false, showcoastlines: false, projection: { type: 'equirectangular' }},
+      margin: { t: 0, b: 0, l: 0, r: 0 }
+    };
+    Plotly.newPlot('origen-map', data, layout, {displayModeBar: false});
+  })();
 </script>
 {% endblock %}
