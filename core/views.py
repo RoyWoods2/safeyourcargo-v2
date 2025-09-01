@@ -2051,10 +2051,18 @@ def descargar_factura_xml(request, factura_id):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
+from django.contrib.auth.decorators import login_required
+from django.http import HttpResponse
+from django.core.exceptions import ObjectDoesNotExist
+
+import openpyxl
+from openpyxl.styles import Font, Alignment
+from openpyxl.utils import get_column_letter
+
+
 @login_required
 def exportar_cobranzas_excel(request):
-    from .models import Cobranza
-    from decimal import Decimal
+    from .models import Cobranza  # y Factura si quieres capturar su DoesNotExist concreto
 
     qs = Cobranza.objects.select_related(
         'certificado',
@@ -2064,7 +2072,7 @@ def exportar_cobranzas_excel(request):
         'certificado__notas'
     ).all()
 
-    # Filtros (mismos de la vista)
+    # -------- Filtros (mismos que la vista) --------
     cliente = request.GET.get("cliente")
     rut = request.GET.get("rut")
     certificado = request.GET.get("certificado")
@@ -2087,27 +2095,28 @@ def exportar_cobranzas_excel(request):
     ws = wb.active
     ws.title = "Reporte Cobranzas"
 
-    # Controles de reporte (editables por el admin)
+    # -------- Controles (simulador) --------
     ws["A1"] = "Controles de reporte"; ws["A1"].font = Font(bold=True)
     ws["A2"] = "TC reporte (CLP/USD)"
     ws["A3"] = "Tasa override (%)"
     ws["A4"] = "Mínimo override (USD)"
 
-    # TC por defecto: intenta usar el último tipo_cambio existente; si no, 950
+    # TC por defecto: usa el último tipo_cambio existente en alguna factura; si no hay, 950
     default_tc = 950.0
     for c in qs.order_by("-certificado__fecha_creacion"):
-        fac = getattr(c.certificado, "factura", None)
-        if fac and getattr(fac, "tipo_cambio", None):
-            try:
+        try:
+            fac = c.certificado.factura  # puede no existir
+            if fac and fac.tipo_cambio:
                 default_tc = float(fac.tipo_cambio)
                 break
-            except Exception:
-                pass
+        except ObjectDoesNotExist:
+            continue
     ws["B2"] = default_tc
     ws["B3"] = ""   # vacío = usa tasa del cliente
     ws["B4"] = ""   # vacío = usa mínimo del cliente
 
-    start = 6  # fila de encabezados
+    # -------- Encabezados --------
+    start = 6
     headers = [
         "N° Certificado","N° Factura","Cliente","RUT",
         "Valor Seguro (USD)","Valor Prima (USD)","Valor Factura (CLP)","Referencia",
@@ -2118,25 +2127,37 @@ def exportar_cobranzas_excel(request):
         cell.font = Font(bold=True)
         cell.alignment = Alignment(horizontal="center")
 
+    # -------- Filas --------
     r = start + 1
     for cobro in qs:
         cert = cobro.certificado
-        fac  = cert.factura
         cli  = cert.cliente
+
+        # factura (seguro, puede no existir)
+        try:
+            fac = cert.factura
+        except ObjectDoesNotExist:
+            fac = None
+
+        # referencia (por si el OneToOne llegara a faltar)
+        try:
+            referencia = cert.notas.referencia or ""
+        except ObjectDoesNotExist:
+            referencia = ""
 
         # columnas base
         ws.cell(row=r, column=1).value = f"C-{cert.id}"
         ws.cell(row=r, column=2).value = fac.numero if fac else ""
         ws.cell(row=r, column=3).value = cli.nombre
         ws.cell(row=r, column=4).value = cli.rut
-        ws.cell(row=r, column=5).value = float(cobro.monto_asegurado or 0)          # Valor Seguro USD
-        ws.cell(row=r, column=6).value = float(cobro.valor_prima_cobro or 0)        # Prima USD guardada
+        ws.cell(row=r, column=5).value = float(cobro.monto_asegurado or 0)           # USD
+        ws.cell(row=r, column=6).value = float(cobro.valor_prima_cobro or 0)         # USD
         ws.cell(row=r, column=7).value = float(fac.valor_clp) if fac and fac.valor_clp else 0  # CLP contable
-        ws.cell(row=r, column=8).value = cert.notas.referencia if getattr(cert, "notas", None) and cert.notas.referencia else ""
+        ws.cell(row=r, column=8).value = referencia
 
-        # tasa/minimo del cliente (ajusta nombres si en tu modelo son otros)
+        # tasa / mínimo del cliente
         tasa_cli   = float(getattr(cli, "tasa", 0) or 0)
-        minimo_cli = float(getattr(cli, "minimo", 0) or 0)
+        minimo_cli = float(getattr(cli, "valor_minimo", 0) or 0)  # <-- campo correcto del modelo
         ws.cell(row=r, column=9).value  = tasa_cli
         ws.cell(row=r, column=10).value = minimo_cli
 
@@ -2149,7 +2170,7 @@ def exportar_cobranzas_excel(request):
 
         r += 1
 
-    # formatos
+    # -------- Formatos --------
     for row in ws.iter_rows(min_row=start+1, max_row=r-1, min_col=5, max_col=12):
         for idx, cell in enumerate(row, start=5):
             if idx in (5, 6, 11):  # USD
@@ -2157,16 +2178,16 @@ def exportar_cobranzas_excel(request):
             if idx in (7, 12):     # CLP
                 cell.number_format = '#,##0'
 
-    # anchos
+    # -------- Anchos --------
     widths = [16,16,28,14,18,18,20,18,10,12,16,18]
     for i, w in enumerate(widths, 1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    # congelar encabezados / auto-filtro
+    # -------- Congelar encabezado / autofiltro --------
     ws.freeze_panes = ws["A7"]
     ws.auto_filter.ref = f"A{start}:L{r-1}"
 
-    # respuesta
+    # -------- Respuesta --------
     response = HttpResponse(
         content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
