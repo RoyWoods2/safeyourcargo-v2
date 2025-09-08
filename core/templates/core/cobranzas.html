@@ -47,12 +47,79 @@
     font-size: 0.875rem;
   }
 </style>
-<div class="text-end mb-3">
+
+<!-- Botonera -->
+<div class="d-flex gap-2 justify-content-end mb-3">
+  <!-- 1) descarga con filtros actuales -->
   <a href="{% url 'exportar_cobranzas_excel' %}?cliente={{ filtros.cliente }}&rut={{ filtros.rut }}&certificado={{ filtros.certificado }}&inicio={{ filtros.inicio }}&fin={{ filtros.fin }}"
      class="btn btn-success btn-sm">
-    <i class="bi bi-file-earmark-excel"></i> Descargar Excel
+    <i class="bi bi-file-earmark-excel"></i> Descargar (filtros actuales)
   </a>
+
+  <!-- 2) exportar con filtros elegidos en el momento -->
+  <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalExportarExcel">
+    <i class="bi bi-sliders"></i> Exportar con filtros…
+  </button>
 </div>
+
+<!-- Modal Exportar con filtros -->
+<div class="modal fade" id="modalExportarExcel" tabindex="-1" aria-labelledby="modalExportarExcelLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h6 class="modal-title" id="modalExportarExcelLabel">Elegir filtros para exportar</h6>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formExportExcel" class="row g-3">
+          <div class="col-md-3">
+            <label class="form-label">Fecha Inicio</label>
+            <input type="date" name="inicio" class="form-control" value="{{ filtros.inicio }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Fecha Fin</label>
+            <input type="date" name="fin" class="form-control" value="{{ filtros.fin }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Cliente</label>
+            <input type="text" name="cliente" class="form-control" value="{{ filtros.cliente }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">RUT</label>
+            <input type="text" name="rut" class="form-control" value="{{ filtros.rut }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Certificado</label>
+            <input type="text" name="certificado" class="form-control" value="{{ filtros.certificado }}">
+          </div>
+          <div class="col-md-3">
+            <label class="form-label">Tipo de Cambio (opcional)</label>
+            <input type="number" step="0.0001" min="0" name="tc" class="form-control" placeholder="Ej: 950.00">
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer d-flex justify-content-between">
+        <small class="text-muted">El archivo se llamará <code>reporteCobranza_YYYY-MM-DD.xlsx</code></small>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button type="button" id="btnDescargarConFiltros" class="btn btn-success btn-sm">
+            <i class="bi bi-download"></i> Descargar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Construye la URL a /cobranzas/exportar/?... con los campos del modal
+  document.getElementById('btnDescargarConFiltros').addEventListener('click', function () {
+    const form = document.getElementById('formExportExcel');
+    const params = new URLSearchParams(new FormData(form));
+    // redirige a la vista de exportación
+    window.location.href = '{% url "exportar_cobranzas_excel" %}?'+params.toString();
+  });
+</script>
 
 
 <!-- FILTROS -->

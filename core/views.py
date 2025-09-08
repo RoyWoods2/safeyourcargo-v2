@@ -53,6 +53,7 @@ from django.utils import timezone
 from django.core.cache import cache
 import string
 from core.models import UnlocodeEntry
+from django.utils.timezone import localtime
 Usuario = get_user_model()
 
 @login_required
@@ -2051,28 +2052,39 @@ def descargar_factura_xml(request, factura_id):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     return response
 
-from django.contrib.auth.decorators import login_required
-from django.http import HttpResponse
-from django.core.exceptions import ObjectDoesNotExist
-
-import openpyxl
-from openpyxl.styles import Font, Alignment
-from openpyxl.utils import get_column_letter
-
-
 @login_required
 def exportar_cobranzas_excel(request):
-    from .models import Cobranza  # y Factura si quieres capturar su DoesNotExist concreto
+    from .models import Cobranza, Usuario  # Cobranza ya existe en tu app
+    import pytz
+    import openpyxl
+    from openpyxl.styles import Font, Alignment
+    from openpyxl.utils import get_column_letter
+    from django.core.exceptions import ObjectDoesNotExist
+    from django.http import HttpResponse
 
+    tz = pytz.timezone("America/Santiago")
+
+    # ====== SCOPE por jerarquía (igual que en vista_cobranzas) ======
+    current_user = request.user
     qs = Cobranza.objects.select_related(
-        'certificado',
-        'certificado__cliente',
-        'certificado__metodo_embarque',
-        'certificado__factura',
-        'certificado__notas'
-    ).all()
+        'certificado', 'certificado__cliente', 'certificado__metodo_embarque',
+        'certificado__factura', 'certificado__notas'
+    )
 
-    # -------- Filtros (mismos que la vista) --------
+    if current_user.is_superuser:
+        pass
+    else:
+        if current_user.rol == 'Administrador':
+            pass
+        elif current_user.rol == 'Revendedor':
+            sub_user_ids = Usuario.objects.filter(creado_por=current_user).values_list('id', flat=True)
+            allowed_user_ids = list(sub_user_ids) + [current_user.id]
+            qs = qs.filter(certificado__creado_por__id__in=allowed_user_ids)
+        else:
+            qs = qs.filter(certificado__creado_por=current_user)
+    # (Esta misma lógica está en tu vista_cobranzas) :contentReference[oaicite:1]{index=1}
+
+    # ====== FILTROS GET (mismos que la tabla) ======
     cliente = request.GET.get("cliente")
     rut = request.GET.get("rut")
     certificado = request.GET.get("certificado")
@@ -2090,108 +2102,102 @@ def exportar_cobranzas_excel(request):
     if fin:
         qs = qs.filter(certificado__fecha_creacion__lte=fin)
 
-    # ---------- Workbook ----------
+    # ====== (opcional) override de tipo de cambio por URL ======
+    tc_override = request.GET.get("tc")
+    try:
+        tc_override = float(tc_override) if tc_override else None
+    except ValueError:
+        tc_override = None
+
+    # ====== Workbook ======
     wb = openpyxl.Workbook()
     ws = wb.active
-    ws.title = "Reporte Cobranzas"
+    ws.title = "Detalle GESIMPEX"
 
-    # -------- Controles (simulador) --------
-    ws["A1"] = "Controles de reporte"; ws["A1"].font = Font(bold=True)
-    ws["A2"] = "TC reporte (CLP/USD)"
-    ws["A3"] = "Tasa override (%)"
-    ws["A4"] = "Mínimo override (USD)"
-
-    # TC por defecto: usa el último tipo_cambio existente en alguna factura; si no hay, 950
-    default_tc = 950.0
-    for c in qs.order_by("-certificado__fecha_creacion"):
-        try:
-            fac = c.certificado.factura  # puede no existir
-            if fac and fac.tipo_cambio:
-                default_tc = float(fac.tipo_cambio)
-                break
-        except ObjectDoesNotExist:
-            continue
-    ws["B2"] = default_tc
-    ws["B3"] = ""   # vacío = usa tasa del cliente
-    ws["B4"] = ""   # vacío = usa mínimo del cliente
-
-    # -------- Encabezados --------
-    start = 6
     headers = [
-        "N° Certificado","N° Factura","Cliente","RUT",
-        "Valor Seguro (USD)","Valor Prima (USD)","Valor Factura (CLP)","Referencia",
-        "Tasa %","Mínimo USD","Prima USD (calc)","A pagar a SyC (CLP)"
+        "Fecha","Referencia","N° de Certificado","Cliente","N° de Factura SYC",
+        "Monto asegurado","Valor Prima usd$","Valor Prima en clp$","Tipo de Cambio",
+        "Pago a SYC en usd$","Pago a SYC en CLP$","Utilidad GESIMPEX en usd$","Utilidad GESIMPEX en clp$",
     ]
     for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=start, column=col, value=h)
-        cell.font = Font(bold=True)
-        cell.alignment = Alignment(horizontal="center")
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(bold=True); c.alignment = Alignment(horizontal="center")
 
-    # -------- Filas --------
-    r = start + 1
-    for cobro in qs:
+    r = 2
+    for cobro in qs.order_by('-certificado__fecha_creacion'):  # orden consistente
         cert = cobro.certificado
         cli  = cert.cliente
 
-        # factura (seguro, puede no existir)
+        # fecha (del certificado)
+        fecha = localtime(cert.fecha_creacion, tz).date() if cert and cert.fecha_creacion else None
+
+        # factura (puede no existir)
         try:
             fac = cert.factura
         except ObjectDoesNotExist:
             fac = None
 
-        # referencia (por si el OneToOne llegara a faltar)
+        # referencia (OneToOne notas)
         try:
             referencia = cert.notas.referencia or ""
         except ObjectDoesNotExist:
             referencia = ""
 
-        # columnas base
-        ws.cell(row=r, column=1).value = f"C-{cert.id}"
-        ws.cell(row=r, column=2).value = fac.numero if fac else ""
-        ws.cell(row=r, column=3).value = cli.nombre
-        ws.cell(row=r, column=4).value = cli.rut
-        ws.cell(row=r, column=5).value = float(cobro.monto_asegurado or 0)           # USD
-        ws.cell(row=r, column=6).value = float(cobro.valor_prima_cobro or 0)         # USD
-        ws.cell(row=r, column=7).value = float(fac.valor_clp) if fac and fac.valor_clp else 0  # CLP contable
-        ws.cell(row=r, column=8).value = referencia
+        n_cert = f"C-{cert.id}" if cert and cert.id else ""
+        n_fact = fac.numero if (fac and getattr(fac, "numero", None)) else ""
 
-        # tasa / mínimo del cliente
-        tasa_cli   = float(getattr(cli, "tasa", 0) or 0)
-        minimo_cli = float(getattr(cli, "valor_minimo", 0) or 0)  # <-- campo correcto del modelo
-        ws.cell(row=r, column=9).value  = tasa_cli
-        ws.cell(row=r, column=10).value = minimo_cli
+        monto_asegurado_usd = float(cobro.monto_asegurado or 0)
+        prima_usd_calc      = float(cobro.valor_prima_cobro or 0)  # prima “final”
+        pago_syc_clp        = float(fac.valor_clp) if fac and fac.valor_clp else 0.0
 
-        # K: Prima USD (calc) = MAX(E*r/100, min) usando overrides si los pones
-        ws.cell(row=r, column=11).value = (
-            f'=ROUND(MAX(E{r}*IF($B$3<>"",$B$3,I{r})/100, IF($B$4<>"",$B$4,J{r})), 2)'
-        )
-        # L: A pagar a SyC (CLP) = Prima USD (calc) * TC reporte
-        ws.cell(row=r, column=12).value = f'=ROUND(K{r}*$B$2, 0)'
+        # TC (override > inferido)
+        if tc_override and prima_usd_calc:
+            tipo_cambio = tc_override
+        else:
+            tipo_cambio = (pago_syc_clp / prima_usd_calc) if prima_usd_calc else None
 
+        valor_prima_clp = round(prima_usd_calc * tipo_cambio) if (prima_usd_calc and tipo_cambio) else None
+
+        ws.cell(r,  1, fecha)
+        ws.cell(r,  2, referencia)
+        ws.cell(r,  3, n_cert)
+        ws.cell(r,  4, cli.nombre if cli else "")
+        ws.cell(r,  5, n_fact)
+        ws.cell(r,  6, monto_asegurado_usd)
+        ws.cell(r,  7, prima_usd_calc)
+        ws.cell(r,  8, valor_prima_clp)
+        ws.cell(r,  9, tipo_cambio)
+        ws.cell(r, 10, prima_usd_calc)     # pago USD = prima USD
+        ws.cell(r, 11, pago_syc_clp)       # pago CLP (contable)
+        ws.cell(r, 12, None)               # utilidades (pendiente de regla)
+        ws.cell(r, 13, None)
         r += 1
 
-    # -------- Formatos --------
-    for row in ws.iter_rows(min_row=start+1, max_row=r-1, min_col=5, max_col=12):
-        for idx, cell in enumerate(row, start=5):
-            if idx in (5, 6, 11):  # USD
-                cell.number_format = '#,##0.00'
-            if idx in (7, 12):     # CLP
-                cell.number_format = '#,##0'
+    # formatos
+    for cell in ws.iter_rows(min_row=2, max_row=r-1, min_col=1, max_col=1):
+        cell[0].number_format = "yyyy-mm-dd"
+    for col in (6,7,10,12):  # USD
+        for cell in ws.iter_rows(min_row=2, max_row=r-1, min_col=col, max_col=col):
+            cell[0].number_format = '#,##0.00'
+    for col in (8,11,13):     # CLP
+        for cell in ws.iter_rows(min_row=2, max_row=r-1, min_col=col, max_col=col):
+            cell[0].number_format = '#,##0'
+    for cell in ws.iter_rows(min_row=2, max_row=r-1, min_col=9, max_col=9):  # TC
+        cell[0].number_format = '#,##0.0000'
 
-    # -------- Anchos --------
-    widths = [16,16,28,14,18,18,20,18,10,12,16,18]
-    for i, w in enumerate(widths, 1):
+    widths = [12,22,18,28,18,18,18,18,14,20,20,24,24]
+    for i,w in enumerate(widths,1):
         ws.column_dimensions[get_column_letter(i)].width = w
 
-    # -------- Congelar encabezado / autofiltro --------
-    ws.freeze_panes = ws["A7"]
-    ws.auto_filter.ref = f"A{start}:L{r-1}"
+    ws.freeze_panes = ws["A2"]
+    ws.auto_filter.ref = f"A1:M{r-1}"
 
-    # -------- Respuesta --------
-    response = HttpResponse(
-        content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    )
-    response['Content-Disposition'] = 'attachment; filename="reporte_cobranzas.xlsx"'
+    # ====== Nombre de archivo con fecha local ======
+    hoy_str = localtime(timezone.now(), tz).strftime("%Y-%m-%d")
+    filename = f"reporteCobranza_{hoy_str}.xlsx"
+
+    response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
     wb.save(response)
     return response
 

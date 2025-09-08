@@ -2,10 +2,9 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
 # BASE_DIR es la carpeta raíz del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+load_dotenv(BASE_DIR / ".env")
 # Clave secreta para producción (NO la subas nunca a repositorios)
 SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'reemplaza-esto-por-una-clave-segura')
 
@@ -65,17 +64,19 @@ TEMPLATES = [
 WSGI_APPLICATION = 'safeyourcargo.wsgi.application'
 
 # Configuración de la base de datos
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+if not DB_PASSWORD:
+    raise RuntimeError("DB_PASSWORD no está definido. Revisa tu .env o variables de entorno.")
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'defaultdb',
         'USER': 'doadmin',
-        'PASSWORD': os.environ.get('DB_PASSWORD', ''),
+        'PASSWORD': DB_PASSWORD,
         'HOST': 'db-postgresql-nyc1-56016-do-user-22829142-0.m.db.ondigitalocean.com',
         'PORT': '25060',
-        'OPTIONS': {
-            'sslmode': 'require',  # ⚠️ Es muy importante para la conexión segura
-        },
+        'OPTIONS': {'sslmode': 'require'},
     }
 }
 
