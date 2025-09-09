@@ -50,11 +50,14 @@
 
 <!-- Botonera -->
 <div class="d-flex gap-2 justify-content-end mb-3">
+  {% if request.user.is_superuser %}
   <!-- 1) descarga con filtros actuales -->
   <a href="{% url 'exportar_cobranzas_excel' %}?cliente={{ filtros.cliente }}&rut={{ filtros.rut }}&certificado={{ filtros.certificado }}&inicio={{ filtros.inicio }}&fin={{ filtros.fin }}"
      class="btn btn-success btn-sm">
     <i class="bi bi-file-earmark-excel"></i> Descargar (filtros actuales)
   </a>
+  {% endif %}
+
 
   <!-- 2) exportar con filtros elegidos en el momento -->
   <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalExportarExcel">
@@ -169,7 +172,7 @@
     <th>Número Factura</th>
     <th>Cliente</th>
     <th>RUT</th>
-    <th>Valor Seguro (USD)</th>
+    <th>Monto Asegurado (USD)</th>
     <th>Valor Prima (USD)</th>
     <th>Valor Factura (CLP)</th>
     <th>Referencia</th>
@@ -180,12 +183,12 @@
   <tr class="text-center align-middle">
     <td>C-{{ cobro.certificado.id }}</td>
     <td>
-      {% if cobro.certificado.factura %}
-        {{ cobro.certificado.factura.numero }}
-      {% else %}
-        <span class="text-muted">-</span>
-      {% endif %}
-    </td>
+  {% if cobro.certificado.factura and cobro.certificado.factura.folio_sii %}
+    {{ cobro.certificado.factura.folio_sii }}
+  {% else %}
+    <span class="text-muted">-</span>
+  {% endif %}
+</td>
     <td>{{ cobro.certificado.cliente.nombre }}</td>
     <td>{{ cobro.certificado.cliente.rut}}</td>
     <td>${{ cobro.monto_asegurado }}</td>
@@ -217,14 +220,14 @@
 <script>
 $(document).ready(function () {
   $('#cobranzaTable').DataTable({
-    order: [[1, 'desc']],
+    // Deshabilita la ordenación inicial para usar el orden del backend
+    "order": [], 
     language: {
       url: 'https://cdn.datatables.net/plug-ins/1.13.6/i18n/es-ES.json'
     },
     searching: false
   });
 });
-
 </script>
 
 {% endblock %}

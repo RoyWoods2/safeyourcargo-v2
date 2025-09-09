@@ -190,14 +190,7 @@
   </li>
 
 
-      <li class="nav-item">
-  <a class="nav-link" href="#" data-bs-toggle="modal" data-bs-target="#modalTracking"><i class="bi bi-box-seam"></i> Tracking Contenedor</a>
-</li>
-{% if user.is_superuser %} {# Puedes añadir esta condición si solo los superusuarios deben ver el botón de prueba #}
-          <li class="nav-item"  >
-            <a class="nav-link" href="{% url 'test_email' %}"><i class="bi bi-envelope"></i> Enviar Email de Prueba</a>
-          </li>
-        {% endif %}
+
 
 
     </ul>
@@ -207,7 +200,7 @@
   </main>
   <footer class="text-center py-3 mt-4 border-top text-muted small">
   Copyright © 2025 Safe Your Cargo. Todos los Derechos Reservados. 
-  <span class="mx-2">·</span> v1.0.0
+  <span class="mx-2">·</span> v1.0.4
 </footer>
 
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

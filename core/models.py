@@ -396,20 +396,34 @@ class Cobranza(models.Model):
         return (self.valor_fca + self.valor_flete) * Decimal('1.10')
 
     def calcular_prima(self):
-        tasa = self.certificado.cliente.tasa
-        minimo = self.certificado.cliente.valor_minimo
-        prima = self.monto_asegurado * tasa
+        # Asegúrate de que las relaciones existan
+        if not self.certificado or not self.certificado.cliente:
+            return Decimal('0.00')
+
+        cliente = self.certificado.cliente
+        metodo_embarque = self.certificado.metodo_embarque
+        tipo_carga = metodo_embarque.tipo_carga if metodo_embarque else None
+
+        if tipo_carga == "PolizaCongelada":
+            tasa = cliente.tasa_congelada
+            minimo = cliente.valor_minimo_congelado
+        else:
+            tasa = cliente.tasa
+            minimo = cliente.valor_minimo
+
+        prima = self.monto_asegurado * (tasa / 100)
         return max(prima, minimo)
 
     def save(self, *args, **kwargs):
-        if not self.monto_asegurado:
-            self.monto_asegurado = self.calcular_monto_asegurado()
-        if not self.valor_prima_estimado:
-            self.valor_prima_estimado = self.calcular_prima()
-        if not self.valor_prima_cobro:
-            self.valor_prima_cobro = self.valor_prima_estimado
-        super().save(*args, **kwargs)
+        # Sincroniza los valores con el certificado antes de guardar
+        if self.certificado:
+            self.valor_fca = self.certificado.tipo_mercancia.valor_fca
+            self.valor_flete = self.certificado.tipo_mercancia.valor_flete
+            self.monto_asegurado = self.certificado.tipo_mercancia.monto_asegurado
+            self.valor_prima_estimado = self.certificado.valor_prima_estimado
+            self.valor_prima_cobro = self.certificado.valor_prima_cobro
         
+        super().save(*args, **kwargs)
         
 class LogActividad(models.Model):
     usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE)

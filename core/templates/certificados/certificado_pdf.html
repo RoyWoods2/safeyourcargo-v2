@@ -159,8 +159,16 @@
     <tr><td><strong>Nombre Nave / Transporte:</strong> {{ certificado.viaje.nombre_avion }}</td><td><strong>Tipo Carga:</strong> {{ certificado.metodo_embarque.tipo_carga }}</td></tr>
 {% if certificado.metodo_embarque.modo_transporte != "TerrestreFerroviario" %}
 <tr>
-  <td><strong>Puerto Origen / Aeropuerto:</strong> {{ certificado.viaje.aeropuerto_origen }}</td>
-  <td><strong>Puerto Destino / Aeropuerto:</strong> {{ certificado.viaje.aeropuerto_destino }}</td>
+  <td>
+    <strong>Puerto Origen / Aeropuerto:</strong> 
+    {% if certificado.viaje.vuelo_origen_ciudad %}{{ certificado.viaje.vuelo_origen_ciudad }}{% endif %}
+    {% if certificado.viaje.aeropuerto_origen %} ({{ certificado.viaje.aeropuerto_origen }}){% endif %}
+  </td>
+  <td>
+    <strong>Puerto Destino / Aeropuerto:</strong>
+    {% if certificado.viaje.vuelo_destino_ciudad %}{{ certificado.viaje.vuelo_destino_ciudad }}{% endif %}
+    {% if certificado.viaje.aeropuerto_destino %} ({{ certificado.viaje.aeropuerto_destino }}){% endif %}
+  </td>
 </tr>
 {% endif %}    <tr><td><strong>Nº Documento de Transporte:</strong> {{ certificado.notas.guia_carga }}</td><td><strong>Referencias:</strong> {{ certificado.notas.referencia }}</td></tr>
   </table>
