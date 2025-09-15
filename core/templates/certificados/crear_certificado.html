@@ -11,7 +11,6 @@
   </div>
 </div>
 
-<!-- FILTROS -->
 <form method="GET" class="row mb-4 gx-3 bg-light p-3 rounded shadow-sm">
   <div class="col-md-3">
     <label class="form-label fw-semibold">Fecha Inicio:</label>
@@ -34,7 +33,6 @@
   </div>
 </form>
 
-<!-- Botón para limpiar filtros -->
 {% if filtros.inicio or filtros.fin or filtros.q %}
 <div class="text-end mb-3">
   <a href="{% url 'crear_certificado' %}" class="btn btn-sm btn-outline-secondary">
@@ -43,7 +41,6 @@
 </div>
 {% endif %}
 
-<!-- TABLA DE CERTIFICADOS -->
 <div class="table-responsive">
   <table class="table table-sm table-hover table-bordered shadow-sm rounded bg-white small">
     <thead class="table-light">
@@ -60,7 +57,6 @@
         <th>Fecha</th>
         <th>PDF Certificado</th>
         <th>PDF Factura</th>
-
       </tr>
     </thead>
     <tbody class="align-middle text-center">
@@ -100,25 +96,30 @@
           </a>
         </td>
         <td>
-       
-  <div class="btn-group btn-group-sm mt-1">
-    {% if cert.factura and cert.factura.url_pdf_sii %}
-  <a href="{{ cert.factura.url_pdf_sii }}" target="_blank" class="btn btn-sm btn-outline-success mt-1" title="PDF Oficial SII (Timbrado)">
-    <i class="bi bi-patch-check-fill"></i> Factura Timbrada
-  </a>
-{% endif %}
-          {% if request.user.is_superuser and cert.factura %}
+          <div class="btn-group btn-group-sm mt-1">
+            {% if cert.creado_por.emitir_factura_automatica %}
+              {% if cert.factura and cert.factura.url_pdf_sii %}
+                <a href="{{ cert.factura.url_pdf_sii }}" target="_blank" class="btn btn-sm btn-outline-success mt-1" title="PDF Oficial SII (Timbrado)">
+                  <i class="bi bi-patch-check-fill"></i> Factura Timbrada
+                </a>
+              {% elif cert.factura and cert.factura.estado_emision == 'fallida' %}
+                <span class="badge bg-danger text-white mt-1">Error de emisión</span>
+              {% else %}
+                <span class="badge bg-warning text-dark mt-1">Pendiente</span>
+              {% endif %}
 
-    <a href="{% url 'descargar_factura_xml' cert.factura.id %}" class="btn btn-outline-primary mt-1" title="Descargar XML">
-      <i class="bi bi-download"></i>
-    </a>
-
-    <button class="btn btn-outline-warning reenviar-xml-btn" data-id="{{ cert.factura.id }}" title="Reenviar a Facturacion.cl">
-      <i class="bi bi-arrow-repeat mt-1"></i>
-    </button>
-  </div>
-{% endif %}
-
+              {% if request.user.is_superuser and cert.factura %}
+                <a href="{% url 'descargar_factura_xml' cert.factura.id %}" class="btn btn-outline-primary mt-1" title="Descargar XML">
+                  <i class="bi bi-download"></i>
+                </a>
+                <button class="btn btn-outline-warning reenviar-xml-btn" data-id="{{ cert.factura.id }}" title="Reenviar a Facturacion.cl">
+                  <i class="bi bi-arrow-repeat mt-1"></i>
+                </button>
+              {% endif %}
+            {% else %}
+              <span class="badge bg-secondary text-white mt-1">Factura Externa</span>
+            {% endif %}
+          </div>
         </td>
       </tr>
       {% empty %}
@@ -136,7 +137,6 @@
   </table>
 </div>
 
-<!-- INFORMACIÓN DE RESULTADOS -->
 {% if certificados %}
 <div class="d-flex justify-content-between align-items-center mb-3">
   <small class="text-muted">
@@ -150,7 +150,6 @@
 </div>
 {% endif %}
 
-<!-- PAGINACIÓN -->
 {% if certificados.has_other_pages %}
 <nav class="mt-4">
   <ul class="pagination justify-content-center">
@@ -187,7 +186,6 @@
 </nav>
 {% endif %}
 
-<!-- MODAL DE CREACIÓN -->
 {% include "certificados/modal_crear_certificado.html" %}
 
 <style>
@@ -306,7 +304,4 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   });
 </script>
-
-
-
 {% endblock %}

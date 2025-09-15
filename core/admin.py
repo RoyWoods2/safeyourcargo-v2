@@ -4,24 +4,33 @@ from django.utils.translation import gettext_lazy as _
 from .models import *
 @admin.register(Usuario)
 class UsuarioAdmin(UserAdmin):
-    model = Usuario
+    # Campos que se muestran en la lista de usuarios
+    list_display = ('username', 'email', 'rol', 'cliente', 'is_active', 'emitir_factura_automatica')
 
-    list_display = ('username', 'correo', 'telefono', 'rol', 'is_active', 'is_superuser')
-    search_fields = ('username', 'correo', 'telefono')
-    list_filter = ('rol', 'is_active', 'is_superuser')
+    # Filtros para la barra lateral
+    list_filter = ('is_active', 'rol', 'cliente')
+    
+    # Campos de búsqueda
+    search_fields = ('username', 'email', 'cliente__nombre')
 
-    fieldsets = UserAdmin.fieldsets + (
-        ('Información adicional', {
-            'fields': ('correo', 'telefono', 'rol', 'cliente', 'pendiente_aprobacion', 'creado_por'),
-        }),
-    )
-
-    add_fieldsets = UserAdmin.add_fieldsets + (
-        ('Información adicional', {
-            'fields': ('correo', 'telefono', 'rol', 'cliente'),
-        }),
+    # Mantiene los campos originales de UserAdmin y añade los nuevos
+    fieldsets = (
+        (None, {'fields': ('username', 'password')}),
+        ('Información Personal', {'fields': ('first_name', 'last_name', 'email', 'correo', 'telefono')}),
+        ('Permisos', {'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions')}),
+        ('Fechas Importantes', {'fields': ('last_login', 'date_joined')}),
+        ('Roles y Clientes', {'fields': ('rol', 'cliente', 'creado_por')}),
+        # ✅ NUEVO: Sección para la facturación automática
+        ('Facturación', {'fields': ('emitir_factura_automatica',)}),
     )
     
+    # ✅ NUEVO: Añade 'emitir_factura_automatica' al formulario de edición
+    add_fieldsets = (
+        (None, {
+            'classes': ('wide',),
+            'fields': ('username', 'email', 'password', 'password_confirm', 'rol', 'cliente', 'creado_por', 'emitir_factura_automatica'),
+        }),
+    )
 @admin.register(Cliente)
 class ClienteAdmin(admin.ModelAdmin):
     list_display = ('nombre', 'rut',  'ciudad', 'pais')
@@ -110,3 +119,59 @@ class LogActividadAdmin(admin.ModelAdmin):
     list_display = ('usuario', 'mensaje', 'fecha')
     search_fields = ('usuario__username', 'mensaje')
     list_filter = ('usuario', 'fecha')
+
+
+
+@admin.register(UnlocodeEntry)
+class UnlocodeEntryAdmin(admin.ModelAdmin):
+    # Campos que se muestran en la lista de entradas
+    list_display = (
+        'locode', 
+        'name', 
+        'country_code', 
+        'function', 
+        'iata'
+    )
+    
+    # Campos por los que se puede buscar. Esto te permitirá buscar por país, código de puerto o nombre.
+    search_fields = (
+        'country_code', 
+        'locode', 
+        'name',
+        'subdiv'
+    )
+    
+    # Filtros que se muestran en la barra lateral
+    list_filter = (
+        'country_code', 
+        'function'
+    )
+    
+    # Permite editar campos directamente desde la lista
+    list_editable = (
+        'name', 
+        'function', 
+        'iata'
+    )
+
+    # Ordenación predeterminada en la lista
+    ordering = (
+        'country_code', 
+        'name'
+    )
+
+    # Campos de solo lectura, para evitar que se modifiquen accidentalmente
+    readonly_fields = (
+        'locode',
+    )
+    
+    # Grupos de campos en la vista de detalle del objeto
+    fieldsets = (
+        (None, {
+            'fields': ('locode', 'name', 'country_code', 'subdiv', 'iata'),
+        }),
+        ('Información Adicional', {
+            'fields': ('function', 'status', 'coordinates'),
+            'classes': ('collapse',),
+        }),
+    )

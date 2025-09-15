@@ -12,6 +12,10 @@ class Usuario(AbstractUser):
         ('Usuario', 'Usuario'),
         ('Revendedor', 'Revendedor')
     ], default='Usuario')
+    emitir_factura_automatica = models.BooleanField(
+        default=True,
+        verbose_name='Emitir factura automáticamente',
+        help_text='Desactiva esta opción si el cliente maneja su propia facturación.')
 
     # ⚡️ Campo que indica quién creó este usuario
     creado_por = models.ForeignKey('self', null=True, blank=True, on_delete=models.SET_NULL, related_name='usuarios_creados')

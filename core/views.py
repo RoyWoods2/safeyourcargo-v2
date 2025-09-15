@@ -1,202 +1,58 @@
-# views.py
-from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
-from .models import *
-from .forms import *
-from django.views.decorators.http import require_POST
-from django.contrib.auth.hashers import make_password
-from django.db import transaction
-from django.http import HttpResponseBadRequest, HttpResponse
-from django.core.paginator import Paginator
-from weasyprint import HTML
-from django.template.loader import render_to_string
-from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-import requests
-from django.utils.formats import date_format
-from num2words import num2words
-from core.services.facturacion_cl import emitir_factura_exenta_cl_xml, generar_txt_factura_exenta,generar_xml_factura_exenta
-from core.services.unlocode_utils import get_ports_by_country,get_airports_by_country,pais_a_codigo # 🔹 IMPORTA AQUÍ
+# 1. Módulos de la librería estándar
+import json
 import logging
-import tempfile
 import io
 import os
-from django.db import models
-from django.core.mail import send_mail
-from django.contrib.auth.decorators import user_passes_test, login_required
-from django.conf import settings
-from django.contrib.auth import authenticate, login
-from django.contrib import messages
-from django.db.models import Count
-from django.views.decorators.csrf import csrf_exempt
-logger = logging.getLogger(__name__)
-from django.contrib.auth import get_user_model
-import json
-from django.db.models import Q, Count, Sum
-from .utils import registrar_actividad, obtener_dolar_observado, descargar_pdf_sii
-from xml.etree.ElementTree import Element, SubElement, tostring
-from django.views.decorators.http import require_http_methods
-from .utils_pdf import generar_pdf_certificado, generar_pdf_factura  
-from django.contrib.admin.views.decorators import staff_member_required
-from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime,timedelta
-import openpyxl
-import pytz
-from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment, Font, PatternFill
-from core.emails import enviar_certificado_y_factura
-from django.http import HttpResponseForbidden
-from django.utils.html import strip_tags
-from .api_client import nsure_api
-from django.db import models
-from django.views import View
-from django.utils import timezone
-from django.core.cache import cache
 import string
-from core.models import UnlocodeEntry
+import tempfile
+import pytz
+from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
+from xml.etree.ElementTree import Element, SubElement, tostring
+from django.utils import timezone as dj_tz
 from django.utils.timezone import localtime
+# 2. Módulos de Django
+from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
+from django.db import transaction, models
+from django.core.paginator import Paginator
+from django.core.mail import send_mail
+from django.db.models import Q, Count, Sum, Max
+from django.contrib.auth.decorators import user_passes_test, login_required
+from django.contrib import messages
+from django.contrib.auth import get_user_model, authenticate, login
+from django.views.decorators.http import require_POST, require_http_methods
+from django.views.decorators.csrf import csrf_exempt
+from django.contrib.admin.views.decorators import staff_member_required
+from django.conf import settings
+from django.template.loader import render_to_string
+from django.utils.html import strip_tags
+from django.utils.formats import date_format
+from django.core.cache import cache
 from django.core.exceptions import ObjectDoesNotExist
+from django.views import View
+
+# 3. Módulos de librerías de terceros
+import requests
+from num2words import num2words
+from weasyprint import HTML
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+
+# 4. Módulos locales de tu proyecto
+from .models import *
+from .forms import *
+from .utils import registrar_actividad, obtener_dolar_observado, descargar_pdf_sii
+from .utils_pdf import generar_pdf_certificado, generar_pdf_factura
+from .api_client import nsure_api
+from core.services.facturacion_cl import emitir_factura_exenta_cl_xml, generar_txt_factura_exenta, generar_xml_factura_exenta
+from core.services.unlocode_utils import get_ports_by_country, get_airports_by_country, pais_a_codigo
+from core.emails import enviar_certificado_y_factura, enviar_solo_certificado
+
+# Instancia del logger y del modelo de usuario
+logger = logging.getLogger(__name__)
 Usuario = get_user_model()
-
-@login_required
-def dashboard(request):
-    user = request.user
-
-    # ===== Rango de días (default 90) =====
-    try:
-        days = int(request.GET.get('days', 90))
-        days = max(0, min(days, 365))
-    except ValueError:
-        days = 90
-    date_filter = {}
-    if days > 0:
-        date_filter = {'fecha_creacion__gte': timezone.now() - timedelta(days=days)}
-
-    # ===== Excluir CLIENTES “Prueba*” =====
-    TEST_CLIENT_NAMES = ["Prueba", "Prueba 2", "Prueba 3"]
-    client_name_filters = Q()
-    for n in TEST_CLIENT_NAMES:
-        client_name_filters |= Q(nombre__iexact=n)
-    test_clients = Cliente.objects.filter(client_name_filters)
-
-    # Tipo de cambio (usa tu función/fallback)
-    resultado = obtener_dolar_observado("hans.arancibia@live.com", "Rhad19326366.")
-    dolar = Decimal(resultado.get("valor", '950.00'))
-
-    certificados_clientes = []
-    certificados_totales = []
-    total_certificados_sum = 0
-    total_prima_usd = Decimal('0.0')
-    total_prima_clp = Decimal('0.0')
-    total_clientes = 0
-    ultimos_certificados = []
-    origen_data = []
-
-    if user.is_superuser or user.rol == "Administrador":
-        # Certificados válidos (excluye clientes de prueba + por periodo)
-        certificados_ok = (
-            CertificadoTransporte.objects
-            .exclude(cliente__in=test_clients)
-            .filter(**date_filter)
-        )
-
-        # Top clientes por cantidad (excluidos “Prueba*”)
-        clientes_ok = (
-            Cliente.objects
-            .exclude(client_name_filters)
-            .annotate(total_certificados=Count(
-                'certificadotransporte',
-                filter=Q(certificadotransporte__in=certificados_ok)
-            ))
-            .filter(total_certificados__gt=0)
-            .order_by('-total_certificados')[:12]
-        )
-        certificados_clientes = [c.nombre for c in clientes_ok]
-        certificados_totales  = [c.total_certificados for c in clientes_ok]
-        total_certificados_sum = certificados_ok.count()
-
-        total_prima_usd = certificados_ok.aggregate(
-            total=Sum('tipo_mercancia__valor_prima')
-        )['total'] or Decimal('0.0')
-        total_prima_clp = total_prima_usd * dolar
-
-        total_clientes = (
-            Cliente.objects.exclude(client_name_filters)
-            .filter(certificadotransporte__in=certificados_ok)
-            .distinct().count()
-        )
-
-        ultimos_certificados = (
-            certificados_ok.select_related('cliente', 'ruta', 'tipo_mercancia')
-            .order_by('-id')[:5]
-        )
-
-        origen_data = (
-            certificados_ok.values('ruta__pais_origen')
-            .annotate(cantidad=Count('id'))
-            .order_by('-cantidad')
-        )
-
-    elif user.rol == "Revendedor":
-        propios_certificados = (
-            CertificadoTransporte.objects
-            .filter(cliente=user.cliente, **date_filter)
-            .exclude(cliente__in=test_clients)
-        )
-        certificados_clientes = [user.cliente.nombre] if user.cliente and not test_clients.filter(pk=user.cliente_id).exists() else []
-        certificados_totales  = [propios_certificados.count()] if certificados_clientes else []
-        total_certificados_sum = propios_certificados.count()
-
-        total_prima_usd = propios_certificados.aggregate(
-            total=Sum('tipo_mercancia__valor_prima')
-        )['total'] or Decimal('0.0')
-        total_prima_clp = total_prima_usd * dolar
-
-        origen_data = (
-            propios_certificados.values('ruta__pais_origen')
-            .annotate(cantidad=Count('id')).order_by('-cantidad')
-        )
-
-    else:
-        propios_certificados = (
-            CertificadoTransporte.objects
-            .filter(creado_por=user, **date_filter)
-            .exclude(cliente__in=test_clients)
-        )
-        agg = (propios_certificados.values('cliente__nombre')
-               .annotate(cantidad=Count('id'))
-               .order_by('-cantidad')[:12])
-        certificados_clientes = [x['cliente__nombre'] for x in agg]
-        certificados_totales  = [x['cantidad'] for x in agg]
-        total_certificados_sum = propios_certificados.count()
-
-        total_prima_usd = propios_certificados.aggregate(
-            total=Sum('tipo_mercancia__valor_prima')
-        )['total'] or Decimal('0.0')
-        total_prima_clp = total_prima_usd * dolar
-
-        origen_data = (
-            propios_certificados.values('ruta__pais_origen')
-            .annotate(cantidad=Count('id')).order_by('-cantidad')
-        )
-
-    # Redondeo para UI
-    total_prima_usd = total_prima_usd.quantize(Decimal('1.'), rounding=ROUND_HALF_UP)
-    total_prima_clp = total_prima_clp.quantize(Decimal('1.'), rounding=ROUND_HALF_UP)
-
-    context = {
-        'certificados_clientes': certificados_clientes,
-        'certificados_totales': certificados_totales,
-        'total_certificados_sum': total_certificados_sum,
-        'total_prima_usd': total_prima_usd,
-        'total_prima_clp': total_prima_clp,
-        'total_clientes': total_clientes,
-        'ultimos_certificados': ultimos_certificados,
-        'origen_paises': [i['ruta__pais_origen'] for i in origen_data],
-        'origen_cantidades': [i['cantidad'] for i in origen_data],
-        'days': days,
-    }
-    return render(request, 'core/dashboard.html', context)
 
 
 
@@ -362,19 +218,15 @@ def lista_usuarios(request):
 def get_form_usuario(request, user_id=None):
     """
     Devuelve el HTML del formulario para crear o editar un usuario.
-    Esta vista es llamada por AJAX desde el modal.
     """
     instance = None
     if user_id:
-        # Se asegura de que el usuario que edita tenga permisos sobre el editado
         instance = get_object_or_404(Usuario, pk=user_id)
-        # Aquí puedes añadir una capa extra de seguridad para verificar permisos
-        # Por ejemplo, un superusuario puede editar a todos, un admin a sus sub-usuarios, etc.
-
-    form = UsuarioForm(instance=instance)
+        
+    # ✅ PASA EL USUARIO ACTUAL AL FORMULARIO
+    form = UsuarioForm(instance=instance, request_user=request.user)
     formset = EmailAdicionalFormSet(instance=instance, prefix='emails')
 
-    # Debes crear esta plantilla parcial
     return render(request, 'core/_form_usuario_content.html', {
         'form': form,
         'email_formset': formset
@@ -487,8 +339,10 @@ def toggle_estado_usuario(request, pk):
     
 
 
+
 @login_required
 def crear_certificado(request):
+    # --- POST: CREACIÓN ---
     if request.method == 'POST':
         cert_form = CertificadoTransporteForm(request.POST, user=request.user)
         ruta_form = RutaForm(request.POST)
@@ -509,164 +363,223 @@ def crear_certificado(request):
         if all(form.is_valid() for form in forms_to_validate.values()):
             try:
                 with transaction.atomic():
+                    # 1) RELACIONADOS
                     ruta = ruta_form.save()
                     metodo = metodo_form.save()
                     mercancia = mercancia_form.save()
-                    viaje = viaje_form.save(commit=False)
 
-                    # Lógica para asignar FK de País
-                    origen_pais = Pais.objects.filter(sigla__iexact=viaje.vuelo_origen_pais).first()
-                    destino_pais = Pais.objects.filter(sigla__iexact=viaje.vuelo_destino_pais).first()
-                    if origen_pais:
-                        viaje.vuelo_origen_pais = origen_pais.nombre
-                        viaje.vuelo_origen_pais_fk = origen_pais
-                    if destino_pais:
-                        viaje.vuelo_destino_pais = destino_pais.nombre
-                        viaje.vuelo_destino_pais_fk = destino_pais
+                    viaje = viaje_form.save(commit=False)
+                    # Normalización de países por sigla (opcional/robusto)
+                    try:
+                        if viaje.vuelo_origen_pais:
+                            p = Pais.objects.filter(sigla__iexact=str(viaje.vuelo_origen_pais).strip()).first()
+                            if p:
+                                viaje.vuelo_origen_pais = p.nombre
+                                viaje.vuelo_origen_pais_fk = p
+                        if viaje.vuelo_destino_pais:
+                            p = Pais.objects.filter(sigla__iexact=str(viaje.vuelo_destino_pais).strip()).first()
+                            if p:
+                                viaje.vuelo_destino_pais = p.nombre
+                                viaje.vuelo_destino_pais_fk = p
+                    except Exception:
+                        logger.warning("Normalización de países falló", exc_info=True)
                     viaje.save()
 
                     notas = notas_form.save()
 
+                    # 2) CERTIFICADO
                     certificado = cert_form.save(commit=False)
+                    # Fallback: si el form no trae cliente y el user sí lo tiene
+                    if not getattr(certificado, 'cliente', None) and getattr(request.user, 'cliente', None):
+                        certificado.cliente = request.user.cliente
+                    if not getattr(certificado, 'cliente', None):
+                        raise ValueError("No hay cliente asociado al certificado (ni por el form ni por el usuario).")
+
                     certificado.ruta = ruta
                     certificado.metodo_embarque = metodo
                     certificado.tipo_mercancia = mercancia
                     certificado.viaje = viaje
                     certificado.notas = notas
                     certificado.creado_por = request.user
+
+                    # Valor prima estimado (seguro aunque el form no lo compute)
+                    valor_prima = getattr(mercancia, 'valor_prima', None)
+                    certificado.valor_prima_estimado = (valor_prima if valor_prima is not None else Decimal('0'))
                     certificado.save()
 
-                    registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
-                    
-                    # --- Generación y emisión de factura ---
-                    factura, created = Factura.objects.get_or_create(
+                    # Cobranza sincronizada
+                    Cobranza.objects.update_or_create(
                         certificado=certificado,
                         defaults={
-                            'numero': Factura.objects.aggregate(max_num=models.Max('numero'))['max_num'] + 1 if Factura.objects.exists() else 1,
-                            'razon_social': certificado.cliente.nombre,
-                            'rut': certificado.cliente.rut,
-                            'direccion': certificado.cliente.direccion,
-                            'comuna': certificado.cliente.region or 'Por definir',
-                            'ciudad': certificado.cliente.ciudad,
-                            'valor_usd': mercancia.valor_prima,
-                            'fecha_emision': date.today(),
-                            'estado_emision': 'pendiente'
+                            'fecha_cobro': date.today(),
+                            'valor_fca': getattr(mercancia, 'valor_fca', None) or Decimal('0'),
+                            'valor_flete': getattr(mercancia, 'valor_flete', None) or Decimal('0'),
+                            'monto_asegurado': getattr(mercancia, 'monto_asegurado', None) or Decimal('0'),
+                            'valor_prima_estimado': certificado.valor_prima_estimado or Decimal('0'),
+                            'valor_prima_cobro': getattr(certificado, 'valor_prima_cobro', None) or Decimal('0'),
+                            'estado': 'pendiente',
                         }
                     )
-                    factura.valor_usd = mercancia.valor_prima
-                    
-                    resultado_dolar = obtener_dolar_observado(settings.BCCH_USER, settings.BCCH_PASS)
-                    dolar = Decimal(resultado_dolar.get("valor", '950.00'))
 
-                    factura.tipo_cambio = dolar
-                    factura.valor_clp = (factura.valor_usd or Decimal('0.0')) * dolar
-                    
-                    # El folio_sii ahora está en None. Se guardará después de obtenerlo de la API.
-                    factura.save()
+                    registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
 
-                    # --- ELIMINADAS LAS LÍNEAS QUE ASIGNABAN EL FOLIO MANUALMENTE ---
-                    # from .models import obtener_siguiente_folio
-                    # factura.folio_sii = obtener_siguiente_folio()
-                    # factura.save()
-                    # -----------------------------------------------------------------
+                    # 3) PDF del certificado (siempre)
+                    certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
 
-                    response_facturacion = emitir_factura_exenta_cl_xml(factura)
-                    
-                    if response_facturacion and response_facturacion.get('success'):
-                        # El folio y la URL se obtienen de la respuesta de la API y se guardan aquí.
-                        factura.folio_sii = response_facturacion.get('folio_sii')
-                        factura.url_pdf_sii = response_facturacion.get('url_pdf_sii')
-                        factura.estado_emision = 'exito'
-                        messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
-                        logger.info(f"Factura {factura.id} emitida con Folio SII: {factura.folio_sii}, URL: {factura.url_pdf_sii}")
-                    else:
-                        error_detalle = response_facturacion.get('error', 'Error desconocido al emitir a facturacion.cl')
-                        factura.estado_emision = 'fallida'
-                        factura.observaciones = f"Error al emitir DTE: {error_detalle}"
-                        messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
-                        logger.error(f"Error al emitir factura {factura.id} a facturacion.cl: {error_detalle}")
-                    
-                    # Guardamos la factura por segunda vez para almacenar el folio y estado final.
-                    factura.save()
+                    # 4) FACTURACIÓN CONDICIONAL
+                    factura_creada = None
+                    response_facturacion = {'success': False}
 
-                    # --- Lógica de Envío de Correos (sin cambios) ---
-                    try:
-                        certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
-                        factura_pdf_buffer = generar_pdf_factura(certificado, request) 
+                    # Flag: primero del usuario; si algún día lo agregas en Cliente, también lo respetará
+                    facturar_automaticamente = bool(
+                        getattr(request.user, 'emitir_factura_automatica', False) or
+                        getattr(certificado.cliente, 'emitir_factura_automatica', False)
+                    )
 
-                        otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '')
-                        emails_manuales = [e.strip() for e in (otros_emails_manuales_str or '').split(',') if e.strip()]
-                        emails_guardados_usuario = request.user.get_lista_emails_adicionales()
-                        todos_los_destinatarios_extra = list(set(emails_manuales + emails_guardados_usuario))
-                        
-                        enviar_certificado_y_factura(
+                    if facturar_automaticamente:
+                        max_num = Factura.objects.aggregate(max_num=Max('numero')).get('max_num') or 0
+                        numero_sugerido = max_num + 1
+                        valor_usd = valor_prima or Decimal('0')
+
+                        factura_creada, _ = Factura.objects.get_or_create(
                             certificado=certificado,
-                            pdf_cert=certificado_pdf_buffer,
-                            factura_obj=factura,
-                            pdf_fact=factura_pdf_buffer,
-                            destinatarios_extra=todos_los_destinatarios_extra
+                            defaults={
+                                'numero': numero_sugerido,
+                                'razon_social': certificado.cliente.nombre,
+                                'rut': certificado.cliente.rut,
+                                'direccion': certificado.cliente.direccion,
+                                'comuna': getattr(certificado.cliente, 'region', None) or 'Por definir',
+                                'ciudad': getattr(certificado.cliente, 'ciudad', None) or '',
+                                'valor_usd': valor_usd,
+                                'fecha_emision': getattr(certificado, 'fecha_partida', None) or date.today(),
+                                'estado_emision': 'pendiente',
+                            }
                         )
-                        logger.info(f"Proceso de envío de correo para certificado C-{certificado.id} iniciado.")
+                        factura_creada.valor_usd = valor_usd
 
-                    except Exception as e:
-                        logger.error(f"Error general en el proceso de envío de correo para el certificado C-{certificado.id}: {e}", exc_info=True)
-                        messages.warning(request, "El certificado se creó y la factura se procesó, pero hubo un problema al enviar la notificación por correo.")
-                    
+                        # Tipo de cambio con fallback
+                        try:
+                            r = obtener_dolar_observado(getattr(settings, 'BCCH_USER', None),
+                                                        getattr(settings, 'BCCH_PASS', None)) or {}
+                            valor_tc = r.get("valor")
+                            dolar = Decimal(str(valor_tc)) if valor_tc is not None else Decimal('950.00')
+                        except Exception:
+                            logger.warning("No se pudo obtener dólar observado, se usa 950.00", exc_info=True)
+                            dolar = Decimal('950.00')
+
+                        factura_creada.tipo_cambio = dolar
+                        factura_creada.valor_clp = (factura_creada.valor_usd or Decimal('0')) * dolar
+                        factura_creada.save()
+
+                        # Emisión DTE
+                        try:
+                            response_facturacion = emitir_factura_exenta_cl_xml(factura_creada) or {}
+                        except Exception as e:
+                            logger.error(f"Fallo al emitir DTE: {e}", exc_info=True)
+                            response_facturacion = {'success': False, 'error': str(e)}
+
+                        if response_facturacion.get('success'):
+                            factura_creada.folio_sii = response_facturacion.get('folio_sii')
+                            factura_creada.url_pdf_sii = response_facturacion.get('url_pdf_sii')
+                            factura_creada.estado_emision = 'exito'
+                            factura_creada.save()
+                            messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
+                        else:
+                            error_detalle = response_facturacion.get('error', 'Error desconocido al emitir en facturacion.cl')
+                            factura_creada.estado_emision = 'fallida'
+                            factura_creada.observaciones = f"Error al emitir DTE: {error_detalle}"
+                            factura_creada.save()
+                            messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
+
+                    # 5) ENVÍO DE CORREOS
+                    try:
+                        otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '') or ''
+                        emails_manuales = [e.strip() for e in otros_emails_manuales_str.split(',') if e.strip()]
+                        try:
+                            emails_guardados = request.user.get_lista_emails_adicionales()
+                        except Exception:
+                            emails_guardados = []
+                        destinatarios_extra = list(set(emails_manuales + emails_guardados))
+
+                        if factura_creada and factura_creada.estado_emision == 'exito':
+                            # ¡OJO! Ahora sí pasamos una Factura a generar_pdf_factura
+                            factura_pdf_buffer = generar_pdf_factura(factura_creada, request)
+                            enviar_certificado_y_factura(
+                                certificado=certificado,
+                                pdf_cert=certificado_pdf_buffer,
+                                factura_obj=factura_creada,
+                                pdf_fact=factura_pdf_buffer,
+                                destinatarios_extra=destinatarios_extra
+                            )
+                        else:
+                            if facturar_automaticamente:
+                                messages.info(request, "El certificado se envió por correo sin adjuntar la factura.")
+                            enviar_solo_certificado(
+                                certificado=certificado,
+                                pdf_cert=certificado_pdf_buffer,
+                                destinatarios_extra=destinatarios_extra
+                            )
+                        logger.info("Correos de notificación enviados.")
+                    except Exception:
+                        logger.error("Error en el envío de correo de notificación", exc_info=True)
+                        messages.warning(request, "El certificado se creó, pero hubo un problema al enviar la notificación por correo.")
+
+                    # Respuesta AJAX
                     if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                         return JsonResponse({
                             'success': True,
-                            'factura_emitida': response_facturacion.get("success", False),
-                            'resultado': response_facturacion
+                            'factura_emitida': bool(facturar_automaticamente and factura_creada and factura_creada.estado_emision == 'exito'),
+                            'resultado': response_facturacion if facturar_automaticamente else {'success': True}
                         })
 
                     return redirect('crear_certificado')
 
             except Exception as e:
-                logger.error(f"Error general en la transacción de creación de certificado/factura: {e}", exc_info=True)
-                messages.error(request, f"Error al generar el certificado o la factura: {e}")
+                logger.error(f"Error en la transacción de creación de certificado/factura: {e}", exc_info=True)
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({'success': False, 'errors': {'__all__': [str(e)]}}, status=400)
+                messages.error(request, f"Error al generar el certificado o la factura: {e}")
                 return redirect('crear_certificado')
 
+        # Formularios inválidos → AJAX
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            errors = {form_name: form_instance.errors for form_name, form_instance in forms_to_validate.items() if not form_instance.is_valid()}
+            errors = {name: form.errors for name, form in forms_to_validate.items() if not form.is_valid()}
             logger.error(f"Errores de validación de formulario: {errors}")
-            return JsonResponse({
-                'success': False,
-                'errors': errors
-            }, status=400)
+            return JsonResponse({'success': False, 'errors': errors}, status=400)
 
-    # --- El resto de la vista (lógica GET) se mantiene igual ---
+    # --- GET: LISTADO / FORMULARIO ---
     fecha_inicio = request.GET.get('inicio')
     fecha_fin = request.GET.get('fin')
-    busqueda = request.GET.get('q', '').strip()
+    busqueda = (request.GET.get('q') or '').strip()
 
-    certificados_list = CertificadoTransporte.objects.select_related('cliente', 'notas', 'creado_por').order_by('-id')
+    certificados_qs = CertificadoTransporte.objects.select_related('cliente', 'notas', 'creado_por').order_by('-id')
+    try:
+        certificados_qs = certificados_qs.select_related('factura')  # OneToOne
+    except Exception:
+        pass
 
     if not request.user.is_superuser:
-        certificados_list = certificados_list.filter(creado_por=request.user)
+        certificados_qs = certificados_qs.filter(creado_por=request.user)
 
     if fecha_inicio:
         try:
-            certificados_list = certificados_list.filter(fecha_creacion__gte=datetime.strptime(fecha_inicio, '%Y-%m-%d').date())
+            certificados_qs = certificados_qs.filter(fecha_creacion__gte=datetime.strptime(fecha_inicio, '%Y-%m-%d').date())
         except ValueError:
-            pass
-
+            messages.warning(request, "Fecha de inicio inválida. Formato esperado: YYYY-MM-DD.")
     if fecha_fin:
         try:
-            certificados_list = certificados_list.filter(fecha_creacion__lte=datetime.strptime(fecha_fin, '%Y-%m-%d').date())
+            certificados_qs = certificados_qs.filter(fecha_creacion__lte=datetime.strptime(fecha_fin, '%Y-%m-%d').date() + timedelta(days=1))
         except ValueError:
-            pass
-
+            messages.warning(request, "Fecha de fin inválida. Formato esperado: YYYY-MM-DD.")
     if busqueda:
-        certificados_list = certificados_list.filter(
+        certificados_qs = certificados_qs.filter(
             Q(cliente__nombre__icontains=busqueda) |
             Q(cliente__rut__icontains=busqueda) |
             Q(id__icontains=busqueda) |
             Q(notas__numero_factura__icontains=busqueda)
         )
 
-    paginator = Paginator(certificados_list, 10)
+    paginator = Paginator(certificados_qs, 10)
     certificados = paginator.get_page(request.GET.get('page'))
 
     context = {
@@ -683,7 +596,6 @@ def crear_certificado(request):
             'q': busqueda,
         }
     }
-
     return render(request, 'certificados/crear_certificado.html', context)
 
 
@@ -786,65 +698,7 @@ def factura_confirmacion(request, pk):
     })
 
 
-from django.http import HttpResponseForbidden
 
-# views.py
-from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
-from .models import *
-from .forms import *
-from django.views.decorators.http import require_POST
-from django.contrib.auth.hashers import make_password
-from django.db import transaction
-from django.http import HttpResponseBadRequest, HttpResponse
-from django.core.paginator import Paginator
-from weasyprint import HTML
-from django.template.loader import render_to_string
-from datetime import date
-from decimal import Decimal, ROUND_HALF_UP
-import requests
-from django.utils.formats import date_format
-from num2words import num2words
-from core.services.facturacion_cl import emitir_factura_exenta_cl_xml, generar_txt_factura_exenta,generar_xml_factura_exenta
-from core.services.unlocode_utils import get_ports_by_country,get_airports_by_country,pais_a_codigo
-import logging
-import tempfile
-import io
-import os
-from django.db import models
-from django.core.mail import send_mail
-from django.contrib.auth.decorators import user_passes_test, login_required
-from django.conf import settings
-from django.contrib.auth import authenticate, login
-from django.contrib import messages
-from django.db.models import Count
-from django.views.decorators.csrf import csrf_exempt
-logger = logging.getLogger(__name__)
-from django.contrib.auth import get_user_model
-import json
-from django.db.models import Q, Count, Sum
-from .utils import registrar_actividad, obtener_dolar_observado, descargar_pdf_sii
-from xml.etree.ElementTree import Element, SubElement, tostring
-from django.views.decorators.http import require_http_methods
-from .utils_pdf import generar_pdf_certificado, generar_pdf_factura
-from django.contrib.admin.views.decorators import staff_member_required
-from django.views.decorators.csrf import csrf_exempt
-from datetime import datetime,timedelta
-import openpyxl
-from openpyxl.utils import get_column_letter
-from openpyxl.styles import Alignment, Font
-from core.emails import enviar_certificado_y_factura
-from django.http import HttpResponseForbidden
-from django.utils.html import strip_tags
-from .api_client import nsure_api
-from django.db import models
-from django.views import View
-from django.utils import timezone
-from django.core.cache import cache
-import string
-from core.models import UnlocodeEntry, Cobranza
-from django.utils.timezone import localtime
-Usuario = get_user_model()
 
 @login_required
 def dashboard(request):
@@ -858,7 +712,8 @@ def dashboard(request):
         days = 90
     date_filter = {}
     if days > 0:
-        date_filter = {'fecha_creacion__gte': timezone.now() - timedelta(days=days)}
+        date_filter = {'fecha_creacion__gte': dj_tz.now() - timedelta(days=days)}
+
 
     # ===== Excluir CLIENTES “Prueba*” =====
     TEST_CLIENT_NAMES = ["Prueba", "Prueba 2", "Prueba 3"]
@@ -1275,219 +1130,7 @@ def toggle_estado_usuario(request, pk):
     
 
 
-@login_required
-def crear_certificado(request):
-    if request.method == 'POST':
-        cert_form = CertificadoTransporteForm(request.POST, user=request.user)
-        ruta_form = RutaForm(request.POST)
-        metodo_form = MetodoEmbarqueForm(request.POST)
-        mercancia_form = TipoMercanciaForm(request.POST)
-        viaje_form = ViajeForm(request.POST)
-        notas_form = NotasNumerosForm(request.POST)
 
-        forms_to_validate = {
-            'cert_form': cert_form,
-            'ruta_form': ruta_form,
-            'metodo_form': metodo_form,
-            'mercancia_form': mercancia_form,
-            'viaje_form': viaje_form,
-            'notas_form': notas_form,
-        }
-
-        if all(form.is_valid() for form in forms_to_validate.values()):
-            try:
-                with transaction.atomic():
-                    ruta = ruta_form.save()
-                    metodo = metodo_form.save()
-                    mercancia = mercancia_form.save()
-                    viaje = viaje_form.save(commit=False)
-
-                    # Lógica para asignar FK de País
-                    origen_pais = Pais.objects.filter(sigla__iexact=viaje.vuelo_origen_pais).first()
-                    destino_pais = Pais.objects.filter(sigla__iexact=viaje.vuelo_destino_pais).first()
-                    if origen_pais:
-                        viaje.vuelo_origen_pais = origen_pais.nombre
-                        viaje.vuelo_origen_pais_fk = origen_pais
-                    if destino_pais:
-                        viaje.vuelo_destino_pais = destino_pais.nombre
-                        viaje.vuelo_destino_pais_fk = destino_pais
-                    viaje.save()
-
-                    notas = notas_form.save()
-
-                    certificado = cert_form.save(commit=False)
-                    certificado.ruta = ruta
-                    certificado.metodo_embarque = metodo
-                    certificado.tipo_mercancia = mercancia
-                    certificado.viaje = viaje
-                    certificado.notas = notas
-                    certificado.creado_por = request.user
-                    certificado.save()
-                    
-                    # ✅ Nuevo código para sincronizar Cobranza
-                    Cobranza.objects.update_or_create(
-                        certificado=certificado,
-                        defaults={
-                            'fecha_cobro': date.today(),
-                            'valor_fca': certificado.tipo_mercancia.valor_fca,
-                            'valor_flete': certificado.tipo_mercancia.valor_flete,
-                            'monto_asegurado': certificado.tipo_mercancia.monto_asegurado,
-                            'valor_prima_estimado': certificado.valor_prima_estimado,
-                            'valor_prima_cobro': certificado.valor_prima_cobro,
-                            'estado': 'pendiente',
-                        }
-                    )
-
-
-                    registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
-                    
-                    # --- Generación y emisión de factura ---
-                    factura, created = Factura.objects.get_or_create(
-                        certificado=certificado,
-                        defaults={
-                            'numero': Factura.objects.aggregate(max_num=models.Max('numero'))['max_num'] + 1 if Factura.objects.exists() else 1,
-                            'razon_social': certificado.cliente.nombre,
-                            'rut': certificado.cliente.rut,
-                            'direccion': certificado.cliente.direccion,
-                            'comuna': certificado.cliente.region or 'Por definir',
-                            'ciudad': certificado.cliente.ciudad,
-                            'valor_usd': mercancia.valor_prima,
-                            'fecha_emision': date.today(),
-                            'estado_emision': 'pendiente'
-                        }
-                    )
-                    factura.valor_usd = mercancia.valor_prima
-                    
-                    resultado_dolar = obtener_dolar_observado(settings.BCCH_USER, settings.BCCH_PASS)
-                    dolar = Decimal(resultado_dolar.get("valor", '950.00'))
-
-                    factura.tipo_cambio = dolar
-                    factura.valor_clp = (factura.valor_usd or Decimal('0.0')) * dolar
-                    
-                    # El folio_sii ahora está en None. Se guardará después de obtenerlo de la API.
-                    factura.save()
-
-                    # --- ELIMINADAS LAS LÍNEAS QUE ASIGNABAN EL FOLIO MANUALMENTE ---
-                    # from .models import obtener_siguiente_folio
-                    # factura.folio_sii = obtener_siguiente_folio()
-                    # factura.save()
-                    # -----------------------------------------------------------------
-
-                    response_facturacion = emitir_factura_exenta_cl_xml(factura)
-                    
-                    if response_facturacion and response_facturacion.get('success'):
-                        # El folio y la URL se obtienen de la respuesta de la API y se guardan aquí.
-                        factura.folio_sii = response_facturacion.get('folio_sii')
-                        factura.url_pdf_sii = response_facturacion.get('url_pdf_sii')
-                        factura.estado_emision = 'exito'
-                        messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
-                        logger.info(f"Factura {factura.id} emitida con Folio SII: {factura.folio_sii}, URL: {factura.url_pdf_sii}")
-                    else:
-                        error_detalle = response_facturacion.get('error', 'Error desconocido al emitir a facturacion.cl')
-                        factura.estado_emision = 'fallida'
-                        factura.observaciones = f"Error al emitir DTE: {error_detalle}"
-                        messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
-                        logger.error(f"Error al emitir factura {factura.id} a facturacion.cl: {error_detalle}")
-                    
-                    # Guardamos la factura por segunda vez para almacenar el folio y estado final.
-                    factura.save()
-
-                    # --- Lógica de Envío de Correos (sin cambios) ---
-                    try:
-                        certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
-                        factura_pdf_buffer = generar_pdf_factura(certificado, request) 
-
-                        otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '')
-                        emails_manuales = [e.strip() for e in (otros_emails_manuales_str or '').split(',') if e.strip()]
-                        emails_guardados_usuario = request.user.get_lista_emails_adicionales()
-                        todos_los_destinatarios_extra = list(set(emails_manuales + emails_guardados_usuario))
-                        
-                        enviar_certificado_y_factura(
-                            certificado=certificado,
-                            pdf_cert=certificado_pdf_buffer,
-                            factura_obj=factura,
-                            pdf_fact=factura_pdf_buffer,
-                            destinatarios_extra=todos_los_destinatarios_extra
-                        )
-                        logger.info(f"Proceso de envío de correo para certificado C-{certificado.id} iniciado.")
-
-                    except Exception as e:
-                        logger.error(f"Error general en el proceso de envío de correo para el certificado C-{certificado.id}: {e}", exc_info=True)
-                        messages.warning(request, "El certificado se creó y la factura se procesó, pero hubo un problema al enviar la notificación por correo.")
-                    
-                    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                        return JsonResponse({
-                            'success': True,
-                            'factura_emitida': response_facturacion.get("success", False),
-                            'resultado': response_facturacion
-                        })
-
-                    return redirect('crear_certificado')
-
-            except Exception as e:
-                logger.error(f"Error general en la transacción de creación de certificado/factura: {e}", exc_info=True)
-                messages.error(request, f"Error al generar el certificado o la factura: {e}")
-                if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'success': False, 'errors': {'__all__': [str(e)]}}, status=400)
-                return redirect('crear_certificado')
-
-        if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            errors = {form_name: form_instance.errors for form_name, form_instance in forms_to_validate.items() if not form_instance.is_valid()}
-            logger.error(f"Errores de validación de formulario: {errors}")
-            return JsonResponse({
-                'success': False,
-                'errors': errors
-            }, status=400)
-
-    # --- El resto de la vista (lógica GET) se mantiene igual ---
-    fecha_inicio = request.GET.get('inicio')
-    fecha_fin = request.GET.get('fin')
-    busqueda = request.GET.get('q', '').strip()
-
-    certificados_list = CertificadoTransporte.objects.select_related('cliente', 'notas', 'creado_por').order_by('-id')
-
-    if not request.user.is_superuser:
-        certificados_list = certificados_list.filter(creado_por=request.user)
-
-    if fecha_inicio:
-        try:
-            certificados_list = certificados_list.filter(fecha_creacion__gte=datetime.strptime(fecha_inicio, '%Y-%m-%d').date())
-        except ValueError:
-            pass
-
-    if fecha_fin:
-        try:
-            certificados_list = certificados_list.filter(fecha_creacion__lte=datetime.strptime(fecha_fin, '%Y-%m-%d').date())
-        except ValueError:
-            pass
-
-    if busqueda:
-        certificados_list = certificados_list.filter(
-            Q(cliente__nombre__icontains=busqueda) |
-            Q(cliente__rut__icontains=busqueda) |
-            Q(id__icontains=busqueda) |
-            Q(notas__numero_factura__icontains=busqueda)
-        )
-
-    paginator = Paginator(certificados_list, 10)
-    certificados = paginator.get_page(request.GET.get('page'))
-
-    context = {
-        'cert_form': CertificadoTransporteForm(user=request.user),
-        'ruta_form': RutaForm(),
-        'metodo_form': MetodoEmbarqueForm(),
-        'mercancia_form': TipoMercanciaForm(),
-        'viaje_form': ViajeForm(),
-        'notas_form': NotasNumerosForm(),
-        'certificados': certificados,
-        'filtros': {
-            'inicio': fecha_inicio or '',
-            'fin': fecha_fin or '',
-            'q': busqueda,
-        }
-    }
-
-    return render(request, 'certificados/crear_certificado.html', context)
 
 
 @login_required

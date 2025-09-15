@@ -90,15 +90,15 @@ class UsuarioForm(forms.ModelForm):
 
     class Meta:
         model = Usuario
-        fields = ['username', 'rol', 'cliente', 'correo', 'telefono', 'password']
+        fields = ['username', 'rol', 'cliente', 'correo', 'telefono', 'emitir_factura_automatica', 'password']
         
-        # ✅ AÑADIMOS WIDGETS PARA APLICAR ESTILOS DE BOOTSTRAP
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'correo': forms.EmailInput(attrs={'class': 'form-control'}),
             'telefono': forms.TextInput(attrs={'class': 'form-control'}),
             'rol': forms.Select(attrs={'class': 'form-select'}),
             'cliente': forms.Select(attrs={'class': 'form-select'}),
+            'emitir_factura_automatica': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
         
         help_texts = {
@@ -106,7 +106,17 @@ class UsuarioForm(forms.ModelForm):
             'rol': 'Define los permisos y lo que el usuario puede ver y hacer en el sistema.',
             'cliente': 'Asocia este usuario a una empresa o cliente específico.',
             'correo': 'Correo principal para notificaciones importantes.',
+            'emitir_factura_automatica': 'Marca para generar facturas automáticamente. Desmarca para que el usuario gestione sus propias facturas.',
         }
+
+    def __init__(self, *args, **kwargs):
+        request_user = kwargs.pop('request_user', None)
+        super().__init__(*args, **kwargs)
+
+        if not self.instance.pk and request_user and not request_user.is_superuser:
+            if not request_user.emitir_factura_automatica:
+                self.initial['emitir_factura_automatica'] = False
+                # self.fields['emitir_factura_automatica'].disabled = True # Opcional: para deshabilitar el campo en la interfaz
 
     def clean_username(self):
         username = self.cleaned_data['username']
