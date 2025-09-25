@@ -200,6 +200,9 @@ class RutaForm(forms.ModelForm):
             'pais_destino': forms.TextInput(attrs={'class': 'form-control'}),
             'ciudad_destino': forms.TextInput(attrs={'class': 'form-control'}),
         }
+from django import forms
+from .models import MetodoEmbarque
+
 class MetodoEmbarqueForm(forms.ModelForm):
     class Meta:
         model = MetodoEmbarque
@@ -224,6 +227,93 @@ class MetodoEmbarqueForm(forms.ModelForm):
             'otro_embalaje_terrestre': forms.TextInput(attrs={'class': 'form-control'}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Todos no requeridos por defecto; se exigen según el modo en clean()
+        for f in self.fields.values():
+            f.required = False
+
+        # Asegura que terrestre use los choices del modelo en un <select>
+        te_field = self.fields.get('tipo_embalaje_terrestre')
+        if te_field:
+            model_choices = MetodoEmbarque._meta.get_field('tipo_embalaje_terrestre').choices
+            te_field.widget = forms.Select(
+                choices=model_choices,
+                attrs=te_field.widget.attrs
+            )
+
+    def clean(self):
+        cleaned = super().clean()
+        modo = cleaned.get('modo_transporte')
+
+        # Reglas base
+        if not modo:
+            self.add_error('modo_transporte', 'Selecciona el modo de transporte.')
+        if not cleaned.get('tipo_carga'):
+            self.add_error('tipo_carga', 'Selecciona el tipo de carga.')
+        if not cleaned.get('clausula'):
+            self.add_error('clausula', 'Selecciona la cláusula.')
+
+        if modo == 'Aereo':
+            # Desactiva campos de otros modos
+            cleaned['embalaje_maritimo'] = None
+            cleaned['tipo_container_maritimo'] = None
+            cleaned['tipo_embalaje_lcl'] = None
+            cleaned['otro_embalaje_lcl'] = None
+            cleaned['tipo_embalaje_terrestre'] = None
+            cleaned['otro_embalaje_terrestre'] = None
+
+            # Validación específica
+            tipo_aer = cleaned.get('tipo_embalaje_aereo')
+            if not tipo_aer:
+                self.add_error('tipo_embalaje_aereo', 'Selecciona el tipo de embalaje aéreo.')
+            if tipo_aer == 'OTRO' and not cleaned.get('otro_embalaje_aereo'):
+                self.add_error('otro_embalaje_aereo', 'Debes especificar el embalaje (Aéreo).')
+
+        elif modo in ('Maritimo', 'MarRojo'):
+            # Desactiva campos de otros modos
+            cleaned['tipo_embalaje_aereo'] = None
+            cleaned['otro_embalaje_aereo'] = None
+            cleaned['tipo_embalaje_terrestre'] = None
+            cleaned['otro_embalaje_terrestre'] = None
+
+            emb = cleaned.get('embalaje_maritimo')
+            if emb not in ('FCL', 'LCL'):
+                self.add_error('embalaje_maritimo', 'Selecciona FCL o LCL.')
+
+            if emb == 'FCL':
+                # LCL no aplica
+                cleaned['tipo_embalaje_lcl'] = None
+                cleaned['otro_embalaje_lcl'] = None
+                # tipo_container requerido
+                if not cleaned.get('tipo_container_maritimo'):
+                    self.add_error('tipo_container_maritimo', 'Selecciona el tipo de contenedor.')
+            elif emb == 'LCL':
+                # FCL no aplica
+                cleaned['tipo_container_maritimo'] = None
+                # embalaje LCL requerido
+                if not cleaned.get('tipo_embalaje_lcl'):
+                    self.add_error('tipo_embalaje_lcl', 'Selecciona el tipo de embalaje LCL.')
+                if cleaned.get('tipo_embalaje_lcl') == 'OTRO' and not cleaned.get('otro_embalaje_lcl'):
+                    self.add_error('otro_embalaje_lcl', 'Debes especificar el embalaje (LCL).')
+
+        elif modo == 'TerrestreFerroviario':
+            # Desactiva campos de otros modos
+            cleaned['tipo_embalaje_aereo'] = None
+            cleaned['otro_embalaje_aereo'] = None
+            cleaned['embalaje_maritimo'] = None
+            cleaned['tipo_container_maritimo'] = None
+            cleaned['tipo_embalaje_lcl'] = None
+            cleaned['otro_embalaje_lcl'] = None
+
+            t = cleaned.get('tipo_embalaje_terrestre')
+            if t not in ('FLC', 'LCL', 'OTRO', None, ''):
+                self.add_error('tipo_embalaje_terrestre', 'Selecciona FLC o LCL.')
+            if t == 'OTRO' and not cleaned.get('otro_embalaje_terrestre'):
+                self.add_error('otro_embalaje_terrestre', 'Debes especificar el embalaje (Terrestre).')
+
+        return cleaned
 
 
 
@@ -240,7 +330,7 @@ class TipoMercanciaForm(forms.ModelForm):
 class ViajeForm(forms.ModelForm):
     """
     Formulario para los detalles del viaje.
-    Es compatible tanto con transporte aéreo como marítimo.
+    Compatible con transporte aéreo, marítimo y terrestre/ferroviario.
     """
     # Campos extra que no están en el modelo, usados por el JS del frontend.
     punto_origen = forms.CharField(
@@ -254,15 +344,13 @@ class ViajeForm(forms.ModelForm):
 
     class Meta:
         model = Viaje
-        # Lista explícita de campos para evitar conflictos.
-        # Usamos 'nombre_avion' porque así se llama en el modelo.
         fields = [
-            'nombre_avion', 'numero_viaje', 'vuelo_origen_pais', 
-            'vuelo_origen_ciudad', 'aeropuerto_origen', 'vuelo_destino_pais', 
-            'vuelo_destino_ciudad', 'aeropuerto_destino', 'descripcion_carga'
+            'nombre_avion', 'numero_viaje',
+            'vuelo_origen_pais', 'vuelo_origen_ciudad', 'aeropuerto_origen',
+            'vuelo_destino_pais', 'vuelo_destino_ciudad', 'aeropuerto_destino',
+            'descripcion_carga'
         ]
         widgets = {
-            # Al campo 'nombre_avion' le damos un ID genérico para el autocompletado JS.
             'nombre_avion': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_nombre_transporte'}),
             'numero_viaje': forms.TextInput(attrs={'class': 'form-control'}),
             'vuelo_origen_pais': forms.TextInput(attrs={'class': 'form-control'}),
@@ -276,20 +364,45 @@ class ViajeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # Cambiamos la etiqueta del campo para que sea genérica en la interfaz de usuario.
-        self.fields['nombre_avion'].label = "Nombre Avión / Navío"
 
-        # Lógica para manejar datos POST en los campos extra (no del modelo)
+        # Etiqueta genérica para UI
+        self.fields['nombre_avion'].label = "Nombre Avión / Navío / Transporte"
+
+        # Aeropuertos: NO requeridos por defecto; se validan por modo en clean()
+        for f in ('aeropuerto_origen', 'aeropuerto_destino'):
+            if f in self.fields:
+                self.fields[f].required = False
+
+        # Manejo de datos POST en los campos extra (no del modelo)
         if self.data.get("punto_origen"):
             self.fields['punto_origen'].widget.choices = [
                 (self.data.get("punto_origen"), self.data.get("punto_origen"))
             ]
-
         if self.data.get("punto_destino"):
             self.fields['punto_destino'].widget.choices = [
                 (self.data.get("punto_destino"), self.data.get("punto_destino"))
             ]
 
+    def clean(self):
+        cleaned = super().clean()
+
+        # El modo viene en el mismo POST (del form MetodoEmbarque)
+        modo = (self.data.get('modo_transporte') or '').strip()
+
+        # Aéreo y Marítimo (incluye Mar Rojo): aeropuertos obligatorios
+        if modo in ('Aereo', 'Maritimo', 'MarRojo'):
+            if not cleaned.get('aeropuerto_origen'):
+                self.add_error('aeropuerto_origen', 'Este campo es obligatorio para el modo seleccionado.')
+            if not cleaned.get('aeropuerto_destino'):
+                self.add_error('aeropuerto_destino', 'Este campo es obligatorio para el modo seleccionado.')
+
+        # Terrestre/Ferroviario: no aplican aeropuertos → limpiarlos
+        elif modo == 'TerrestreFerroviario':
+            cleaned['aeropuerto_origen'] = None
+            cleaned['aeropuerto_destino'] = None
+
+        # Si modo vacío/inesperado, no forcemos error por aeropuertos aquí.
+        return cleaned
 class NotasNumerosForm(forms.ModelForm):
     class Meta:
         model = NotasNumeros

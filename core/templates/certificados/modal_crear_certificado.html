@@ -85,7 +85,6 @@
         <form id="form-certificado" method="post">
           {% csrf_token %}
 
-          <!-- SECCIÓN DE INFORMACIÓN GENERAL -->
           <div class="section-container">
             <span class="badge text-white">INFORMACIÓN GENERAL</span>
             <div class="row mb-3 mt-3">
@@ -114,7 +113,6 @@
             </div>
           </div>
 
-          <!-- SECCIÓN DE ORIGEN DEL PRODUCTO -->
           <div class="section-container">
             <span class="badge text-white">ORIGEN DEL PRODUCTO</span>
             <div class="row mb-3 mt-3">
@@ -146,12 +144,9 @@
           </div>
 
 
-<!-- SECCIÓN DE EMBARQUE -->
 <div class="section-container">
   <span class="badge text-white">EMBARQUE</span>
-
   <div class="row mb-3 mt-3 g-3">
-    <!-- Campos principales -->
     <div class="col-md-4">
       {{ metodo_form.modo_transporte.label_tag }}
       {{ metodo_form.modo_transporte }}
@@ -165,11 +160,8 @@
       {{ metodo_form.clausula }}
     </div>
 
-    <!-- Campos dinámicos según el tipo de transporte -->
     <div id="campos-embarque-dinamicos" class="col-12">
       <div class="row g-3">
-
-        <!-- AÉREO -->
         <div id="grupo_embalaje_aereo" class="col-md-6 d-none">
           {{ metodo_form.tipo_embalaje_aereo.label_tag }}
           {{ metodo_form.tipo_embalaje_aereo }}
@@ -179,7 +171,6 @@
           {{ metodo_form.otro_embalaje_aereo }}
         </div>
 
-        <!-- MARÍTIMO -->
         <div id="grupo_embalaje_maritimo" class="col-md-6 d-none">
           {{ metodo_form.embalaje_maritimo.label_tag }}
           {{ metodo_form.embalaje_maritimo }}
@@ -188,7 +179,7 @@
           {{ metodo_form.tipo_container_maritimo.label_tag }}
           {{ metodo_form.tipo_container_maritimo }}
         </div>
-        <div id="grupo_tipo_embalaje_lcl" class="col-md-6 d-none">
+        <div id="grupo_tipo_embalaje_lcl_maritimo" class="col-md-6 d-none">
           {{ metodo_form.tipo_embalaje_lcl.label_tag }}
           {{ metodo_form.tipo_embalaje_lcl }}
         </div>
@@ -197,23 +188,32 @@
           {{ metodo_form.otro_embalaje_lcl }}
         </div>
 
-        <!-- TERRESTRE -->
         <div id="grupo_embalaje_terrestre" class="col-md-6 d-none">
           {{ metodo_form.tipo_embalaje_terrestre.label_tag }}
           {{ metodo_form.tipo_embalaje_terrestre }}
         </div>
+
+        <div class="col-md-6">
+          <div id="grupo_tipo_container_terrestre" class="d-none">
+            <label class="form-label" for="id_tipo_container_terrestre">Tipo de container</label>
+            {{ metodo_form.tipo_container_maritimo }}
+          </div>
+          <div id="grupo_embalaje_lcl_terrestre" class="d-none">
+            {{ metodo_form.tipo_embalaje_lcl.label_tag }}
+            {{ metodo_form.tipo_embalaje_lcl }}
+          </div>
+        </div>
+
         <div id="grupo_otro_embalaje_terrestre" class="col-md-6 d-none">
           {{ metodo_form.otro_embalaje_terrestre.label_tag }}
           {{ metodo_form.otro_embalaje_terrestre }}
         </div>
-
       </div>
     </div>
   </div>
 </div>
 
 
-          <!-- SECCIÓN DE VALORES Y PRIMA -->
           <div class="section-container">
             <span class="badge text-white">💰 VALORES Y PRIMA</span>
             <div class="row mb-3 mt-3">
@@ -248,7 +248,6 @@
             </div>
           </div>
 
-          <!-- SECCIÓN DE DETALLES DEL VIAJE -->
           <div class="section-container">
             <span class="badge text-white">DETALLES DEL VIAJE</span>
             <div class="row mb-3 mt-3">
@@ -302,7 +301,6 @@
             </div>
           </div>
 
-          <!-- SECCIONES RESTANTES (NOTAS, ENVÍO) -->
           <div class="section-container">
             <span class="badge text-white">NOTAS Y NÚMEROS</span>
             <div class="row mb-3 mt-3">
@@ -313,10 +311,7 @@
             </div>
           </div>
           
-          <!-- SECCIÓN DE OPCIONES DE ENVÍO (CORREGIDA Y MEJORADA) -->
-
-
-        </form>
+          </form>
       </div>
 
       <div class="modal-footer">

@@ -49,7 +49,7 @@ from .api_client import nsure_api
 from core.services.facturacion_cl import emitir_factura_exenta_cl_xml, generar_txt_factura_exenta, generar_xml_factura_exenta
 from core.services.unlocode_utils import get_ports_by_country, get_airports_by_country, pais_a_codigo
 from core.emails import enviar_certificado_y_factura, enviar_solo_certificado
-
+from django.views.decorators.http import require_GET
 # Instancia del logger y del modelo de usuario
 logger = logging.getLogger(__name__)
 Usuario = get_user_model()
@@ -336,40 +336,50 @@ def toggle_estado_usuario(request, pk):
         })
     except User.DoesNotExist:
         raise Http404("Usuario no encontrado")
-    
-
 
 
 @login_required
 def crear_certificado(request):
+    # Leo el modo que viene del form de MetodoEmbarque (lo usaremos también para Viaje)
+    modo_post = (request.POST.get('modo_transporte') or '').strip() if request.method == 'POST' else ''
+
     # --- POST: CREACIÓN ---
     if request.method == 'POST':
-        cert_form = CertificadoTransporteForm(request.POST, user=request.user)
-        ruta_form = RutaForm(request.POST)
+        cert_form   = CertificadoTransporteForm(request.POST, user=request.user)
+        ruta_form   = RutaForm(request.POST)
         metodo_form = MetodoEmbarqueForm(request.POST)
-        mercancia_form = TipoMercanciaForm(request.POST)
-        viaje_form = ViajeForm(request.POST)
-        notas_form = NotasNumerosForm(request.POST)
+        merc_form   = TipoMercanciaForm(request.POST)
+        viaje_form  = ViajeForm(request.POST)
+        notas_form  = NotasNumerosForm(request.POST)
 
         forms_to_validate = {
             'cert_form': cert_form,
             'ruta_form': ruta_form,
             'metodo_form': metodo_form,
-            'mercancia_form': mercancia_form,
+            'mercancia_form': merc_form,
             'viaje_form': viaje_form,
             'notas_form': notas_form,
         }
 
-        if all(form.is_valid() for form in forms_to_validate.values()):
+        # Si TODO es válido -> creamos
+        if all(f.is_valid() for f in forms_to_validate.values()):
             try:
                 with transaction.atomic():
                     # 1) RELACIONADOS
-                    ruta = ruta_form.save()
-                    metodo = metodo_form.save()
-                    mercancia = mercancia_form.save()
+                    ruta      = ruta_form.save()
+                    metodo    = metodo_form.save()
+                    mercancia = merc_form.save()
 
                     viaje = viaje_form.save(commit=False)
-                    # Normalización de países por sigla (opcional/robusto)
+
+                    # Si es Terrestre/Ferroviario, garantizamos aeropuertos nulos (evita NOT NULL)
+                    if modo_post == 'TerrestreFerroviario':
+                        if hasattr(viaje, 'aeropuerto_origen'):
+                            viaje.aeropuerto_origen = None
+                        if hasattr(viaje, 'aeropuerto_destino'):
+                            viaje.aeropuerto_destino = None
+
+                    # Normalización robusta de países (si usas sigla -> nombre)
                     try:
                         if viaje.vuelo_origen_pais:
                             p = Pais.objects.filter(sigla__iexact=str(viaje.vuelo_origen_pais).strip()).first()
@@ -383,13 +393,14 @@ def crear_certificado(request):
                                 viaje.vuelo_destino_pais_fk = p
                     except Exception:
                         logger.warning("Normalización de países falló", exc_info=True)
-                    viaje.save()
 
+                    viaje.save()
                     notas = notas_form.save()
 
                     # 2) CERTIFICADO
                     certificado = cert_form.save(commit=False)
-                    # Fallback: si el form no trae cliente y el user sí lo tiene
+
+                    # Fallback de cliente: del usuario si el form no lo trae
                     if not getattr(certificado, 'cliente', None) and getattr(request.user, 'cliente', None):
                         certificado.cliente = request.user.cliente
                     if not getattr(certificado, 'cliente', None):
@@ -402,12 +413,12 @@ def crear_certificado(request):
                     certificado.notas = notas
                     certificado.creado_por = request.user
 
-                    # Valor prima estimado (seguro aunque el form no lo compute)
+                    # Valor prima estimado (fallback)
                     valor_prima = getattr(mercancia, 'valor_prima', None)
                     certificado.valor_prima_estimado = (valor_prima if valor_prima is not None else Decimal('0'))
                     certificado.save()
 
-                    # Cobranza sincronizada
+                    # 2.5) Cobranza sincronizada
                     Cobranza.objects.update_or_create(
                         certificado=certificado,
                         defaults={
@@ -423,14 +434,13 @@ def crear_certificado(request):
 
                     registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
 
-                    # 3) PDF del certificado (siempre)
+                    # 3) PDF del certificado
                     certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
 
-                    # 4) FACTURACIÓN CONDICIONAL
+                    # 4) FACTURACIÓN (condicional)
                     factura_creada = None
                     response_facturacion = {'success': False}
 
-                    # Flag: primero del usuario; si algún día lo agregas en Cliente, también lo respetará
                     facturar_automaticamente = bool(
                         getattr(request.user, 'emitir_factura_automatica', False) or
                         getattr(certificado.cliente, 'emitir_factura_automatica', False)
@@ -457,7 +467,7 @@ def crear_certificado(request):
                         )
                         factura_creada.valor_usd = valor_usd
 
-                        # Tipo de cambio con fallback
+                        # Tipo de cambio (fallback 950 si no hay servicio)
                         try:
                             r = obtener_dolar_observado(getattr(settings, 'BCCH_USER', None),
                                                         getattr(settings, 'BCCH_PASS', None)) or {}
@@ -502,7 +512,6 @@ def crear_certificado(request):
                         destinatarios_extra = list(set(emails_manuales + emails_guardados))
 
                         if factura_creada and factura_creada.estado_emision == 'exito':
-                            # ¡OJO! Ahora sí pasamos una Factura a generar_pdf_factura
                             factura_pdf_buffer = generar_pdf_factura(factura_creada, request)
                             enviar_certificado_y_factura(
                                 certificado=certificado,
@@ -539,15 +548,56 @@ def crear_certificado(request):
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
                     return JsonResponse({'success': False, 'errors': {'__all__': [str(e)]}}, status=400)
                 messages.error(request, f"Error al generar el certificado o la factura: {e}")
-                return redirect('crear_certificado')
+                context = {
+                    'cert_form': cert_form,
+                    'ruta_form': ruta_form,
+                    'metodo_form': metodo_form,
+                    'mercancia_form': merc_form,
+                    'viaje_form': viaje_form,
+                    'notas_form': notas_form,
+                    'certificados': _build_certificados_queryset(request),
+                    'filtros': {'inicio': '', 'fin': '', 'q': ''},
+                    'open_modal': True,
+                }
+                return render(request, 'certificados/crear_certificado.html', context)
 
-        # Formularios inválidos → AJAX
+        # --- POST INVÁLIDO: re-render con errores visibles ---
+        errors = {name: form.errors for name, form in forms_to_validate.items() if not form.is_valid()}
+        logger.error(f"Errores de validación de formulario: {errors}")
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-            errors = {name: form.errors for name, form in forms_to_validate.items() if not form.is_valid()}
-            logger.error(f"Errores de validación de formulario: {errors}")
             return JsonResponse({'success': False, 'errors': errors}, status=400)
 
+        messages.error(request, "Hay errores en el formulario. Revisa los campos resaltados en el modal.")
+        context = {
+            'cert_form': cert_form,
+            'ruta_form': ruta_form,
+            'metodo_form': metodo_form,
+            'mercancia_form': merc_form,
+            'viaje_form': viaje_form,
+            'notas_form': notas_form,
+            'certificados': _build_certificados_queryset(request),
+            'filtros': {'inicio': '', 'fin': '', 'q': ''},
+            'open_modal': True,
+        }
+        return render(request, 'certificados/crear_certificado.html', context)
+
     # --- GET: LISTADO / FORMULARIO ---
+    certificados, filtros = _build_certificados_queryset(request, return_filters=True)
+    context = {
+        'cert_form': CertificadoTransporteForm(user=request.user),
+        'ruta_form': RutaForm(),
+        'metodo_form': MetodoEmbarqueForm(),
+        'mercancia_form': TipoMercanciaForm(),
+        'viaje_form': ViajeForm(),
+        'notas_form': NotasNumerosForm(),
+        'certificados': certificados,
+        'filtros': filtros,
+    }
+    return render(request, 'certificados/crear_certificado.html', context)
+
+
+def _build_certificados_queryset(request, return_filters=False):
+    """Factoricé tu bloque de GET para reusarlo arriba cuando hay que re-renderizar."""
     fecha_inicio = request.GET.get('inicio')
     fecha_fin = request.GET.get('fin')
     busqueda = (request.GET.get('q') or '').strip()
@@ -582,21 +632,13 @@ def crear_certificado(request):
     paginator = Paginator(certificados_qs, 10)
     certificados = paginator.get_page(request.GET.get('page'))
 
-    context = {
-        'cert_form': CertificadoTransporteForm(user=request.user),
-        'ruta_form': RutaForm(),
-        'metodo_form': MetodoEmbarqueForm(),
-        'mercancia_form': TipoMercanciaForm(),
-        'viaje_form': ViajeForm(),
-        'notas_form': NotasNumerosForm(),
-        'certificados': certificados,
-        'filtros': {
+    if return_filters:
+        return certificados, {
             'inicio': fecha_inicio or '',
             'fin': fecha_fin or '',
             'q': busqueda,
         }
-    }
-    return render(request, 'certificados/crear_certificado.html', context)
+    return certificados
 
 
 @login_required
@@ -2624,7 +2666,7 @@ def exportar_cobranzas_excel(request):
     ws_detalle.auto_filter.ref = f"A1:I{r-1}"
     
     # ====== Nombre de archivo con fecha local ======
-    hoy_str = localtime(timezone.now(), tz).strftime("%Y-%m-%d")
+    hoy_str = localtime(dj_tz.now(), tz).strftime("%Y-%m-%d")
     filename = f"reporteCobranza_{hoy_str}.xlsx"
 
     response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -2883,3 +2925,23 @@ def buscar_navios(request):
     ]
     
     return JsonResponse({'results': resultados_formateados})
+
+
+
+@require_GET
+@login_required
+def tipos_embalaje_por_medio(request):
+    """
+    Devuelve opciones de embalaje según el medio seleccionado.
+    Para Terrestre/Ferroviario: FLC y LCL (en camión).
+    """
+    medio = (request.GET.get('medio') or '').strip().lower()
+    opciones = []
+
+    if medio in ('terrestre', 'ferroviario'):
+        opciones = [
+            {'value': 'FLC', 'label': 'FLC (En camión)'},
+            {'value': 'LCL', 'label': 'LCL (En camión)'},
+        ]
+
+    return JsonResponse({'opciones': opciones})

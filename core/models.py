@@ -227,7 +227,11 @@ TIPOS_CONTAINER = [
     ('ISO TANK', 'ISO TANK'),
     ('FLEXI TANK', 'FLEXI TANK'),
 ]
-
+TERRESTRE_EMBALAJE_CHOICES = [
+    ('FLC', 'FLC (En camión)'),
+    ('LCL', 'LCL (En camión)'),
+    ('OTRO', 'Otro (especificar)'),
+]
 class MetodoEmbarque(models.Model):
     MODO_CHOICES = [
         ('Aereo', 'Aéreo'),
@@ -279,7 +283,7 @@ class MetodoEmbarque(models.Model):
     otro_embalaje_lcl = models.CharField(max_length=100, blank=True, null=True)
 
     # TERRESTRE
-    tipo_embalaje_terrestre = models.CharField(max_length=100, blank=True, null=True)
+    tipo_embalaje_terrestre = models.CharField(max_length=100, blank=True, null=True, choices=TERRESTRE_EMBALAJE_CHOICES)
     otro_embalaje_terrestre = models.CharField(max_length=100, blank=True, null=True)
 
     def __str__(self):
@@ -317,15 +321,33 @@ class TipoMercancia(models.Model):
 class Viaje(models.Model):
     nombre_avion = models.CharField(max_length=100)
     numero_viaje = models.CharField(max_length=100)
-    vuelo_origen_pais = models.CharField(max_length=100)
+
+    vuelo_origen_pais   = models.CharField(max_length=100)
     vuelo_origen_ciudad = models.CharField(max_length=100)
-    aeropuerto_origen = models.CharField(max_length=100)
-    vuelo_destino_pais = models.CharField(max_length=100)
+
+    # Aeropuerto de ORIGEN ahora permite null/blank
+    aeropuerto_origen = models.CharField(max_length=100, null=True, blank=True)
+
+    vuelo_destino_pais   = models.CharField(max_length=100)
     vuelo_destino_ciudad = models.CharField(max_length=100)
-    aeropuerto_destino = models.CharField(max_length=100)
+
+    # Aeropuerto de DESTINO ahora permite null/blank
+    aeropuerto_destino = models.CharField(max_length=100, null=True, blank=True)
+
     descripcion_carga = models.TextField()
-    vuelo_origen_pais_fk = models.ForeignKey(Pais, on_delete=models.CASCADE, related_name='viajes_origen', null=True, blank=True)
-    vuelo_destino_pais_fk = models.ForeignKey(Pais, on_delete=models.CASCADE, related_name='viajes_destino', null=True, blank=True)
+
+    # FK de país (como ya tenías)
+    vuelo_origen_pais_fk = models.ForeignKey(
+        'Pais', on_delete=models.CASCADE, related_name='viajes_origen',
+        null=True, blank=True
+    )
+    vuelo_destino_pais_fk = models.ForeignKey(
+        'Pais', on_delete=models.CASCADE, related_name='viajes_destino',
+        null=True, blank=True
+    )
+
+    def __str__(self):
+        return f"{self.nombre_avion} - {self.numero_viaje}"
     
 
 class NotasNumeros(models.Model):
