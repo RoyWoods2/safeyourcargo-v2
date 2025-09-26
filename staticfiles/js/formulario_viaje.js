@@ -51,7 +51,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const grupoEmbalajeLCLTerrestre = document.getElementById("grupo_embalaje_lcl_terrestre");
   const grupoOtroTerrestre = document.getElementById("grupo_otro_embalaje_terrestre");
 
-
   // =========================================
   // UTILS
   // =========================================
@@ -232,50 +231,101 @@ document.addEventListener("DOMContentLoaded", function () {
     ].forEach(hide);
   }
 
-  function actualizarVistaEmbalaje() {
-    const modo = (modoTransporte && modoTransporte.value) || "";
-    hideAllPacking();
-    if (!labelTransporte) return;
+// Helpers
+function show(el){ if(el) el.classList.remove('d-none'); }
+function hide(el){ if(el) el.classList.add('d-none'); }
+function clearSelect(sel){
+  if(!sel) return;
+  sel.value = '';
+  sel.dispatchEvent(new Event('change'));
+}
 
-    if (modo === "Aereo") {
-      labelTransporte.textContent = "Nombre Avión / Línea Aérea";
-      show(grupoAereo);
-      if (tipoEmbalajeAereo && tipoEmbalajeAereo.value === "OTRO") show(grupoOtroAereo);
-      return;
-    }
+function actualizarVistaEmbalaje() {
+  const modo = (modoTransporte && modoTransporte.value) || "";
 
-    if (modo === "Maritimo" || modo === "MarRojo") {
-      labelTransporte.textContent = "Nombre Navío / Línea Naviera";
-      show(grupoMaritimo);
-      ensureOptions(embalajeMaritimo, MARITIMO_OPTS, true);
-      const val = embalajeMaritimo ? embalajeMaritimo.value : "";
-      if (val === "FCL") {
-        show(grupoContMar);
-      } else if (val === "LCL") {
-        show(grupoEmbalajeLCLMaritimo);
-        if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
-      }
-      return;
-    }
+  // Oculta todo
+  [grupoAereo, grupoOtroAereo,
+   grupoMaritimo, grupoContMar, grupoEmbalajeLCLMaritimo, grupoOtroLCL,
+   grupoTerrestre, grupoContTer, grupoEmbalajeLCLTerrestre, grupoOtroTerrestre
+  ].forEach(hide);
 
-    if (modo === "TerrestreFerroviario") {
-      labelTransporte.textContent = "Nombre Transporte Terrestre";
-      show(grupoTerrestre);
-      ensureOptions(tipoEmbalajeTerrestre, TERRESTRE_OPTS);
-      const val = tipoEmbalajeTerrestre ? tipoEmbalajeTerrestre.value : "";
-      if (val === "FLC") {
-        show(grupoContTer);
-      } else if (val === "LCL") {
-        show(grupoEmbalajeLCLTerrestre);
-        if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
-      } else if (val === "OTRO") {
-        show(grupoOtroTerrestre);
-      }
-      return;
-    }
+  if (!labelTransporte) return;
 
-    labelTransporte.textContent = "Nombre Transporte";
+  if (modo === "Aereo") {
+    labelTransporte.textContent = "Nombre Avión / Línea Aérea";
+    show(grupoAereo);
+    if (tipoEmbalajeAereo && tipoEmbalajeAereo.value === "OTRO") show(grupoOtroAereo);
+    return;
   }
+
+  if (modo === "Maritimo" || modo === "MarRojo") {
+    labelTransporte.textContent = "Nombre Navío / Línea Naviera";
+    show(grupoMaritimo);
+
+    const val = embalajeMaritimo ? embalajeMaritimo.value : "";
+    if (val === "FCL") {
+      // Requiere contenedor
+      if (selContMar) selContMar.required = true;
+      show(grupoContMar);
+      hide(grupoEmbalajeLCLMaritimo);
+      hide(grupoOtroLCL);
+      // Limpia posibles residuos LCL
+      if (embalajeLCL) { embalajeLCL.value = ''; }
+      const otroLcl = document.getElementById('id_otro_embalaje_lcl');
+      if (otroLcl) otroLcl.value = '';
+    } else if (val === "LCL") {
+      // No requiere contenedor
+      if (selContMar) selContMar.required = false;
+      clearSelect(selContMar);
+      show(grupoEmbalajeLCLMaritimo);
+      if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
+    } else {
+      // Nada seleccionado aún: limpia y oculta
+      if (selContMar) selContMar.required = false;
+      clearSelect(selContMar);
+      hide(grupoEmbalajeLCLMaritimo);
+      hide(grupoOtroLCL);
+    }
+    return;
+  }
+
+  if (modo === "TerrestreFerroviario") {
+    labelTransporte.textContent = "Nombre Transporte Terrestre";
+    show(grupoTerrestre);
+
+    const val = tipoEmbalajeTerrestre ? tipoEmbalajeTerrestre.value : "";
+    if (val === "FLC") {
+      if (selContTer) selContTer.required = true;  // reutiliza el mismo select del contenedor
+      show(grupoContTer);
+      hide(grupoEmbalajeLCLTerrestre);
+      hide(grupoOtroTerrestre);
+      // Limpia posibles residuos LCL
+      if (embalajeLCL) embalajeLCL.value = '';
+      const otroLcl = document.getElementById('id_otro_embalaje_lcl');
+      if (otroLcl) otroLcl.value = '';
+    } else if (val === "LCL") {
+      if (selContTer) selContTer.required = false;
+      clearSelect(selContTer);
+      show(grupoEmbalajeLCLTerrestre);
+      hide(grupoOtroTerrestre);
+      if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
+    } else if (val === "OTRO") {
+      if (selContTer) selContTer.required = false;
+      clearSelect(selContTer);
+      hide(grupoEmbalajeLCLTerrestre);
+      show(grupoOtroTerrestre);
+    } else {
+      if (selContTer) selContTer.required = false;
+      clearSelect(selContTer);
+      hide(grupoEmbalajeLCLTerrestre);
+      hide(grupoOtroTerrestre);
+    }
+    return;
+  }
+
+  // Otro modo
+  labelTransporte.textContent = "Nombre Transporte";
+}
 
   function actualizarVistaTransporte() {
     const modo = (modoTransporte && modoTransporte.value) || "";
@@ -504,6 +554,118 @@ document.addEventListener("DOMContentLoaded", function () {
     if (ciudadOrigenRuta && vueloOrigenCiudad) ciudadOrigenRuta.addEventListener('change', () => copiarValorSiVacio(ciudadOrigenRuta, vueloOrigenCiudad));
     if (paisDestinoRuta && vueloDestinoPais) paisDestinoRuta.addEventListener('change', () => copiarValorSiVacio(paisDestinoRuta, vueloDestinoPais));
     if (ciudadDestinoRuta && vueloDestinoCiudad) ciudadDestinoRuta.addEventListener('change', () => copiarValorSiVacio(ciudadDestinoRuta, vueloDestinoCiudad));
+  }
+
+  // =========================================
+  // ENVÍO DE FORMULARIO CON SWEETALERT2
+  // =========================================
+  const formCertificado = document.getElementById("form-certificado");
+  const spinnerOverlay = document.getElementById("spinner-overlay");
+  
+  if (formCertificado) {
+    formCertificado.addEventListener("submit", async function (event) {
+      event.preventDefault(); // Evita el envío por defecto del formulario
+
+      // Elimina las clases de error y los mensajes de feedback anteriores
+      document.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+      document.querySelectorAll('.invalid-feedback').forEach(el => el.remove());
+
+      // Muestra el spinner
+      spinnerOverlay.style.display = 'flex';
+
+      try {
+        const formData = new FormData(formCertificado);
+        
+        const response = await fetch(formCertificado.action, {
+          method: 'POST',
+          body: formData,
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+            'X-CSRFToken': getCookie('csrftoken'),
+          }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+          Swal.fire({
+            title: '¡Éxito!',
+            text: 'Certificado creado correctamente.',
+            icon: 'success',
+            confirmButtonText: 'Ok'
+          }).then(() => {
+            // Recarga la página después de que el usuario haga clic en 'Ok'
+            location.reload();
+          });
+        } else {
+          // Manejar errores de validación
+          let errorHtml = '<ul style="text-align: left; list-style-position: inside;">';
+          const errors = data.errors;
+
+          // Parsea y recorre los errores de manera segura
+          let parsedErrors = {};
+          if (typeof errors === 'string') {
+              try {
+                  parsedErrors = JSON.parse(errors);
+              } catch (e) {
+                  console.error("No se pudo parsear el JSON de errores:", e);
+                  parsedErrors = { '__all__': ['Error en el servidor.'] };
+              }
+          } else {
+              parsedErrors = errors;
+          }
+
+          for (const formName in parsedErrors) {
+            const formErrors = parsedErrors[formName];
+
+            // Si es un error general del formulario
+            if (formName === '__all__') {
+                formErrors.forEach(errorText => {
+                    errorHtml += `<li><strong>Error general:</strong> ${errorText}</li>`;
+                });
+            } else {
+                for (const fieldName in formErrors) {
+                    const fieldErrors = formErrors[fieldName];
+                    fieldErrors.forEach(errorText => {
+                        // Resaltar el campo con error y añadir feedback
+                        const fieldId = `id_${fieldName}`;
+                        const fieldElement = document.getElementById(fieldId);
+                        if (fieldElement) {
+                            fieldElement.classList.add('is-invalid');
+                            let feedback = fieldElement.parentElement.querySelector('.invalid-feedback');
+                            if (!feedback) {
+                                feedback = document.createElement('div');
+                                feedback.classList.add('invalid-feedback');
+                                fieldElement.parentElement.appendChild(feedback);
+                            }
+                            feedback.textContent = errorText;
+                        }
+                        // Agregar el error a la lista del SweetAlert
+                        errorHtml += `<li><strong>${fieldName}:</strong> ${errorText}</li>`;
+                    });
+                }
+            }
+          }
+          errorHtml += '</ul>';
+          
+          Swal.fire({
+            title: 'Error de validación',
+            html: 'Se encontraron los siguientes errores:<br>' + errorHtml,
+            icon: 'error',
+            confirmButtonText: 'Cerrar'
+          });
+        }
+      } catch (error) {
+        Swal.fire({
+          title: 'Error de conexión',
+          text: 'Ocurrió un error al intentar enviar el formulario. Inténtalo de nuevo.',
+          icon: 'error',
+          confirmButtonText: 'Cerrar'
+        });
+      } finally {
+        spinnerOverlay.style.display = 'none';
+      }
+    });
   }
 
   // =========================================

@@ -2,9 +2,12 @@ from django import forms
 from .models import Cliente,CertificadoTransporte, Ruta, MetodoEmbarque, TipoMercancia, Viaje, NotasNumeros,EmailAdicional 
 from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
-from django.forms.widgets import Select  # <--- este import es clave
+from django.forms.widgets import Select
 from django.forms import inlineformset_factory
+from django.db.models import Q
+
 Usuario = get_user_model()
+
 class ClienteSelectWidget(Select):
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
@@ -14,10 +17,10 @@ class ClienteSelectWidget(Select):
             option["attrs"]["data-minimo"] = f"{int(label.valor_minimo)}"
             option["attrs"]["data-minimo-congelado"] = f"{int(label.valor_minimo_congelado)}"
         except AttributeError:
-            pass  # Si el label no es un objeto cliente, lo ignora (por ejemplo, opción vacía)
+            pass
         return option
+
 class ClienteForm(forms.ModelForm):
-    # ✅ recibimos el usuario para validar en el “scope” correcto
     def __init__(self, *args, **kwargs):
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
@@ -31,29 +34,24 @@ class ClienteForm(forms.ModelForm):
             'tramo_cobro'
         ]
 
-    # --- Helper: queryset dentro del alcance del usuario ---
     def _scope_qs(self):
         qs = Cliente.objects.all()
         u = self.user
         if not u or u.is_superuser:
             return qs
-        # Admin ve sus clientes + clientes de sus revendedores
         if getattr(u, 'rol', None) == 'Administrador':
             revendedores = Usuario.objects.filter(creado_por=u)
             return qs.filter(Q(creado_por=u) | Q(creado_por__in=revendedores))
-        # Usuario normal: solo los suyos
         return qs.filter(creado_por=u)
 
-    # --- Tus validaciones originales (ajustadas al scope) ---
     def clean_nombre(self):
         nombre = self.cleaned_data['nombre']
-        cliente_id = self.instance.pk  # importante para edición
+        cliente_id = self.instance.pk
         qs = self._scope_qs().exclude(pk=cliente_id)
         if qs.filter(nombre__iexact=nombre).exists():
             raise forms.ValidationError("Ya existe un cliente con este nombre.")
         return nombre
 
-    # ✅ nueva: valida RUT dentro del scope del usuario (sin tocar formato)
     def clean_rut(self):
         rut = (self.cleaned_data.get('rut') or '').strip()
         cliente_id = self.instance.pk
@@ -70,15 +68,7 @@ class ClienteForm(forms.ModelForm):
         valor = self.cleaned_data.get('valor_minimo_congelado', '')
         return int(str(valor).replace('.', '').replace(',', ''))
 
-
-
-
-
 class UsuarioForm(forms.ModelForm):
-    """
-    Formulario para los datos principales del Usuario.
-    Añadimos widgets para aplicar las clases de Bootstrap.
-    """
     password = forms.CharField(
         widget=forms.PasswordInput(attrs={
             'class': 'form-control', 
@@ -91,7 +81,6 @@ class UsuarioForm(forms.ModelForm):
     class Meta:
         model = Usuario
         fields = ['username', 'rol', 'cliente', 'correo', 'telefono', 'emitir_factura_automatica', 'password']
-        
         widgets = {
             'username': forms.TextInput(attrs={'class': 'form-control'}),
             'correo': forms.EmailInput(attrs={'class': 'form-control'}),
@@ -100,7 +89,6 @@ class UsuarioForm(forms.ModelForm):
             'cliente': forms.Select(attrs={'class': 'form-select'}),
             'emitir_factura_automatica': forms.CheckboxInput(attrs={'class': 'form-check-input'})
         }
-        
         help_texts = {
             'username': 'El nombre único con el que el usuario iniciará sesión.',
             'rol': 'Define los permisos y lo que el usuario puede ver y hacer en el sistema.',
@@ -112,12 +100,10 @@ class UsuarioForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         request_user = kwargs.pop('request_user', None)
         super().__init__(*args, **kwargs)
-
         if not self.instance.pk and request_user and not request_user.is_superuser:
             if not request_user.emitir_factura_automatica:
                 self.initial['emitir_factura_automatica'] = False
-                # self.fields['emitir_factura_automatica'].disabled = True # Opcional: para deshabilitar el campo en la interfaz
-
+    
     def clean_username(self):
         username = self.cleaned_data['username']
         if self.instance.pk is None:
@@ -128,22 +114,16 @@ class UsuarioForm(forms.ModelForm):
                 raise forms.ValidationError("Ya existe otro usuario con este nombre.")
         return username
 
-
 class EmailAdicionalForm(forms.ModelForm):
-    """
-    Formulario para un único registro de EmailAdicional.
-    """
     class Meta:
         model = EmailAdicional
         fields = ['email']
-        # ✅ AÑADIMOS WIDGETS AQUÍ TAMBIÉN
         widgets = {
             'email': forms.EmailInput(attrs={
                 'class': 'form-control form-control-sm', 
                 'placeholder': 'correo@ejemplo.com'
             })
         }
-
 
 EmailAdicionalFormSet = inlineformset_factory(
     parent_model=Usuario,
@@ -153,18 +133,17 @@ EmailAdicionalFormSet = inlineformset_factory(
     can_delete=True,
     min_num=0,
 )
+
 class CertificadoTransporteForm(forms.ModelForm):
-    # Añade este campo al formulario, igual que en la sugerencia anterior
     otros_emails_copia = forms.CharField(
         label='Enviar copia a otros emails (separados por coma)',
-        required=False, # Este campo es opcional
+        required=False,
         help_text='Ej: email1@ejemplo.com, email2@ejemplo.com',
         widget=forms.TextInput(attrs={'placeholder': 'email1@dominio.com, email2@dominio.com'})
     )
 
     class Meta:
         model = CertificadoTransporte
-        # ¡IMPORTANTE! Añade 'otros_emails_copia' a la lista de fields
         fields = ['cliente', 'fecha_partida', 'fecha_llegada', 'otros_emails_copia']
         widgets = {
             'cliente': ClienteSelectWidget(attrs={'class': 'form-select', 'id': 'id_cliente'}),
@@ -175,21 +154,10 @@ class CertificadoTransporteForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-
-        # Filtra si no es superuser
         if user and not user.is_superuser:
             self.fields['cliente'].queryset = Cliente.objects.filter(creado_por=user)
-
-        # 👇 Esta línea es clave para mantener el objeto como label y acceder a tasas
         self.fields['cliente'].label_from_instance = lambda obj: obj
 
-
-
-
-
-
-
-        
 class RutaForm(forms.ModelForm):
     class Meta:
         model = Ruta
@@ -200,8 +168,6 @@ class RutaForm(forms.ModelForm):
             'pais_destino': forms.TextInput(attrs={'class': 'form-control'}),
             'ciudad_destino': forms.TextInput(attrs={'class': 'form-control'}),
         }
-from django import forms
-from .models import MetodoEmbarque
 
 class MetodoEmbarqueForm(forms.ModelForm):
     class Meta:
@@ -211,111 +177,44 @@ class MetodoEmbarqueForm(forms.ModelForm):
             'modo_transporte': forms.Select(attrs={'class': 'form-select', 'id': 'modoTransporte'}),
             'tipo_carga': forms.Select(attrs={'class': 'form-select'}),
             'clausula': forms.Select(attrs={'class': 'form-select'}),
-
-            # AÉREO
-            'tipo_embalaje_aereo': forms.Select(attrs={'class': 'form-select'}),
-            'otro_embalaje_aereo': forms.TextInput(attrs={'class': 'form-control'}),
-
-            # MARÍTIMO
-            'embalaje_maritimo': forms.Select(attrs={'class': 'form-select'}),
-            'tipo_container_maritimo': forms.Select(attrs={'class': 'form-select'}),
-            'tipo_embalaje_lcl': forms.Select(attrs={'class': 'form-select'}),
-            'otro_embalaje_lcl': forms.TextInput(attrs={'class': 'form-control'}),
-
-            # TERRESTRE
-            'tipo_embalaje_terrestre': forms.Select(attrs={'class': 'form-select'}),
-            'otro_embalaje_terrestre': forms.TextInput(attrs={'class': 'form-control'}),
+            'tipo_embalaje_aereo': forms.Select(attrs={'class': 'form-select', 'id': 'id_tipo_embalaje_aereo'}),
+            'otro_embalaje_aereo': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_otro_embalaje_aereo'}),
+            'embalaje_maritimo': forms.Select(attrs={'class': 'form-select', 'id': 'id_embalaje_maritimo'}),
+            'tipo_container_maritimo': forms.Select(attrs={'class': 'form-select', 'id': 'id_tipo_container_maritimo'}),
+            'tipo_embalaje_lcl': forms.Select(attrs={'class': 'form-select', 'id': 'id_tipo_embalaje_lcl'}),
+            'otro_embalaje_lcl': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_otro_embalaje_lcl'}),
+            'tipo_embalaje_terrestre': forms.Select(attrs={'class': 'form-select', 'id': 'id_tipo_embalaje_terrestre'}),
+            'otro_embalaje_terrestre': forms.TextInput(attrs={'class': 'form-control', 'id': 'id_otro_embalaje_terrestre'}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # Todos no requeridos por defecto; se exigen según el modo en clean()
-        for f in self.fields.values():
-            f.required = False
-
-        # Asegura que terrestre use los choices del modelo en un <select>
-        te_field = self.fields.get('tipo_embalaje_terrestre')
-        if te_field:
-            model_choices = MetodoEmbarque._meta.get_field('tipo_embalaje_terrestre').choices
-            te_field.widget = forms.Select(
-                choices=model_choices,
-                attrs=te_field.widget.attrs
-            )
+        # Hacemos todos los campos opcionales por defecto en el init
+        for field in self.fields.values():
+            field.required = False
 
     def clean(self):
-        cleaned = super().clean()
-        modo = cleaned.get('modo_transporte')
-
-        # Reglas base
-        if not modo:
-            self.add_error('modo_transporte', 'Selecciona el modo de transporte.')
-        if not cleaned.get('tipo_carga'):
-            self.add_error('tipo_carga', 'Selecciona el tipo de carga.')
-        if not cleaned.get('clausula'):
-            self.add_error('clausula', 'Selecciona la cláusula.')
-
-        if modo == 'Aereo':
-            # Desactiva campos de otros modos
-            cleaned['embalaje_maritimo'] = None
-            cleaned['tipo_container_maritimo'] = None
-            cleaned['tipo_embalaje_lcl'] = None
-            cleaned['otro_embalaje_lcl'] = None
-            cleaned['tipo_embalaje_terrestre'] = None
-            cleaned['otro_embalaje_terrestre'] = None
-
-            # Validación específica
-            tipo_aer = cleaned.get('tipo_embalaje_aereo')
-            if not tipo_aer:
-                self.add_error('tipo_embalaje_aereo', 'Selecciona el tipo de embalaje aéreo.')
-            if tipo_aer == 'OTRO' and not cleaned.get('otro_embalaje_aereo'):
-                self.add_error('otro_embalaje_aereo', 'Debes especificar el embalaje (Aéreo).')
-
-        elif modo in ('Maritimo', 'MarRojo'):
-            # Desactiva campos de otros modos
-            cleaned['tipo_embalaje_aereo'] = None
-            cleaned['otro_embalaje_aereo'] = None
-            cleaned['tipo_embalaje_terrestre'] = None
-            cleaned['otro_embalaje_terrestre'] = None
-
-            emb = cleaned.get('embalaje_maritimo')
-            if emb not in ('FCL', 'LCL'):
+        cleaned_data = super().clean()
+        modo = cleaned_data.get('modo_transporte')
+        
+        # Validación de campos requeridos condicionalmente
+        if modo in ('Maritimo', 'MarRojo'):
+            if not cleaned_data.get('embalaje_maritimo'):
                 self.add_error('embalaje_maritimo', 'Selecciona FCL o LCL.')
-
-            if emb == 'FCL':
-                # LCL no aplica
-                cleaned['tipo_embalaje_lcl'] = None
-                cleaned['otro_embalaje_lcl'] = None
-                # tipo_container requerido
-                if not cleaned.get('tipo_container_maritimo'):
-                    self.add_error('tipo_container_maritimo', 'Selecciona el tipo de contenedor.')
-            elif emb == 'LCL':
-                # FCL no aplica
-                cleaned['tipo_container_maritimo'] = None
-                # embalaje LCL requerido
-                if not cleaned.get('tipo_embalaje_lcl'):
-                    self.add_error('tipo_embalaje_lcl', 'Selecciona el tipo de embalaje LCL.')
-                if cleaned.get('tipo_embalaje_lcl') == 'OTRO' and not cleaned.get('otro_embalaje_lcl'):
-                    self.add_error('otro_embalaje_lcl', 'Debes especificar el embalaje (LCL).')
-
+            elif cleaned_data.get('embalaje_maritimo') == 'FCL' and not cleaned_data.get('tipo_container_maritimo'):
+                self.add_error('tipo_container_maritimo', 'Selecciona el tipo de contenedor.')
+            elif cleaned_data.get('embalaje_maritimo') == 'LCL' and not cleaned_data.get('tipo_embalaje_lcl'):
+                self.add_error('tipo_embalaje_lcl', 'Selecciona el tipo de embalaje.')
+        
         elif modo == 'TerrestreFerroviario':
-            # Desactiva campos de otros modos
-            cleaned['tipo_embalaje_aereo'] = None
-            cleaned['otro_embalaje_aereo'] = None
-            cleaned['embalaje_maritimo'] = None
-            cleaned['tipo_container_maritimo'] = None
-            cleaned['tipo_embalaje_lcl'] = None
-            cleaned['otro_embalaje_lcl'] = None
-
-            t = cleaned.get('tipo_embalaje_terrestre')
-            if t not in ('FLC', 'LCL', 'OTRO', None, ''):
-                self.add_error('tipo_embalaje_terrestre', 'Selecciona FLC o LCL.')
-            if t == 'OTRO' and not cleaned.get('otro_embalaje_terrestre'):
-                self.add_error('otro_embalaje_terrestre', 'Debes especificar el embalaje (Terrestre).')
-
-        return cleaned
-
-
+            if not cleaned_data.get('tipo_embalaje_terrestre'):
+                self.add_error('tipo_embalaje_terrestre', 'Selecciona el tipo de embalaje terrestre.')
+            elif cleaned_data.get('tipo_embalaje_terrestre') == 'FLC' and not cleaned_data.get('tipo_container_maritimo'):
+                self.add_error('tipo_container_maritimo', 'Selecciona el tipo de contenedor.')
+            elif cleaned_data.get('tipo_embalaje_terrestre') == 'LCL' and not cleaned_data.get('tipo_embalaje_lcl'):
+                self.add_error('tipo_embalaje_lcl', 'Selecciona el tipo de embalaje.')
+                
+        return cleaned_data
 
 class TipoMercanciaForm(forms.ModelForm):
     class Meta:
@@ -327,12 +226,8 @@ class TipoMercanciaForm(forms.ModelForm):
             'valor_flete': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'inputmode': 'decimal'}),
             'valor_prima': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'inputmode': 'decimal'}),
         }
+
 class ViajeForm(forms.ModelForm):
-    """
-    Formulario para los detalles del viaje.
-    Compatible con transporte aéreo, marítimo y terrestre/ferroviario.
-    """
-    # Campos extra que no están en el modelo, usados por el JS del frontend.
     punto_origen = forms.CharField(
         required=False,
         widget=forms.Select(attrs={'class': 'form-select', 'id': 'id_punto_origen'})
@@ -364,16 +259,10 @@ class ViajeForm(forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # Etiqueta genérica para UI
         self.fields['nombre_avion'].label = "Nombre Avión / Navío / Transporte"
-
-        # Aeropuertos: NO requeridos por defecto; se validan por modo en clean()
         for f in ('aeropuerto_origen', 'aeropuerto_destino'):
             if f in self.fields:
                 self.fields[f].required = False
-
-        # Manejo de datos POST en los campos extra (no del modelo)
         if self.data.get("punto_origen"):
             self.fields['punto_origen'].widget.choices = [
                 (self.data.get("punto_origen"), self.data.get("punto_origen"))
@@ -385,24 +274,14 @@ class ViajeForm(forms.ModelForm):
 
     def clean(self):
         cleaned = super().clean()
-
-        # El modo viene en el mismo POST (del form MetodoEmbarque)
         modo = (self.data.get('modo_transporte') or '').strip()
-
-        # Aéreo y Marítimo (incluye Mar Rojo): aeropuertos obligatorios
         if modo in ('Aereo', 'Maritimo', 'MarRojo'):
             if not cleaned.get('aeropuerto_origen'):
                 self.add_error('aeropuerto_origen', 'Este campo es obligatorio para el modo seleccionado.')
             if not cleaned.get('aeropuerto_destino'):
                 self.add_error('aeropuerto_destino', 'Este campo es obligatorio para el modo seleccionado.')
-
-        # Terrestre/Ferroviario: no aplican aeropuertos → limpiarlos
-        elif modo == 'TerrestreFerroviario':
-            cleaned['aeropuerto_origen'] = None
-            cleaned['aeropuerto_destino'] = None
-
-        # Si modo vacío/inesperado, no forcemos error por aeropuertos aquí.
         return cleaned
+
 class NotasNumerosForm(forms.ModelForm):
     class Meta:
         model = NotasNumeros
@@ -420,18 +299,15 @@ class NotasNumerosForm(forms.ModelForm):
         self.fields['numero_factura'].required = False
         self.fields['notas'].required = False
 
-
 class NsureTestForm(forms.Form):
-    # Nuevo campo para el ID de la declaración
     declaration_id = forms.CharField(
         max_length=255, 
         required=False, 
         label="ID de Declaración (para Navíos/Países)",
         help_text="Necesitas crear una declaración primero para obtener este ID. Puede ser un ID numérico o 'external-id=TU_ID_EXTERNO'."
     )
-
     ENDPOINT_CHOICES = [
-        ('create_declaration', '1. Crear Declaración de Prueba'), # Nueva opción
+        ('create_declaration', '1. Crear Declaración de Prueba'),
         ('vessels', '2. Buscador de Navíos (5.4)'),
         ('countries', '3. Listado de Países (5.6)'),
     ]

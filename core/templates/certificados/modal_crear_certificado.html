@@ -175,38 +175,33 @@
           {{ metodo_form.embalaje_maritimo.label_tag }}
           {{ metodo_form.embalaje_maritimo }}
         </div>
-        <div id="grupo_tipo_container_maritimo" class="col-md-6 d-none">
-          {{ metodo_form.tipo_container_maritimo.label_tag }}
-          {{ metodo_form.tipo_container_maritimo }}
-        </div>
-        <div id="grupo_tipo_embalaje_lcl_maritimo" class="col-md-6 d-none">
-          {{ metodo_form.tipo_embalaje_lcl.label_tag }}
-          {{ metodo_form.tipo_embalaje_lcl }}
-        </div>
-        <div id="grupo_otro_embalaje_lcl" class="col-md-6 d-none">
-          {{ metodo_form.otro_embalaje_lcl.label_tag }}
-          {{ metodo_form.otro_embalaje_lcl }}
-        </div>
-
+        
         <div id="grupo_embalaje_terrestre" class="col-md-6 d-none">
           {{ metodo_form.tipo_embalaje_terrestre.label_tag }}
           {{ metodo_form.tipo_embalaje_terrestre }}
         </div>
 
         <div class="col-md-6">
-          <div id="grupo_tipo_container_terrestre" class="d-none">
-            <label class="form-label" for="id_tipo_container_terrestre">Tipo de container</label>
+          <div id="grupo_tipo_container_maritimo" class="d-none">
+            {{ metodo_form.tipo_container_maritimo.label_tag }}
             {{ metodo_form.tipo_container_maritimo }}
+          </div>
+          <div id="grupo_tipo_embalaje_lcl_maritimo" class="d-none">
+            {{ metodo_form.tipo_embalaje_lcl.label_tag }}
+            {{ metodo_form.tipo_embalaje_lcl }}
+          </div>
+          <div id="grupo_otro_embalaje_lcl" class="d-none">
+            {{ metodo_form.otro_embalaje_lcl.label_tag }}
+            {{ metodo_form.otro_embalaje_lcl }}
           </div>
           <div id="grupo_embalaje_lcl_terrestre" class="d-none">
             {{ metodo_form.tipo_embalaje_lcl.label_tag }}
             {{ metodo_form.tipo_embalaje_lcl }}
           </div>
-        </div>
-
-        <div id="grupo_otro_embalaje_terrestre" class="col-md-6 d-none">
-          {{ metodo_form.otro_embalaje_terrestre.label_tag }}
-          {{ metodo_form.otro_embalaje_terrestre }}
+          <div id="grupo_otro_embalaje_terrestre" class="d-none">
+            {{ metodo_form.otro_embalaje_terrestre.label_tag }}
+            {{ metodo_form.otro_embalaje_terrestre }}
+          </div>
         </div>
       </div>
     </div>

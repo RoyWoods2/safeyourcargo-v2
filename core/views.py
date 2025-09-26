@@ -14,7 +14,7 @@ from django.utils.timezone import localtime
 # 2. Módulos de Django
 from django.shortcuts import render, get_object_or_404, redirect
 from django.http import JsonResponse, HttpResponse, HttpResponseBadRequest, HttpResponseForbidden
-from django.db import transaction, models
+from django.db import transaction, models, IntegrityError
 from django.core.paginator import Paginator
 from django.core.mail import send_mail
 from django.db.models import Q, Count, Sum, Max
@@ -340,18 +340,33 @@ def toggle_estado_usuario(request, pk):
 
 @login_required
 def crear_certificado(request):
-    # Leo el modo que viene del form de MetodoEmbarque (lo usaremos también para Viaje)
-    modo_post = (request.POST.get('modo_transporte') or '').strip() if request.method == 'POST' else ''
+    """
+    Vista para crear un certificado de transporte y procesar la información relacionada.
+    Incluye lógica de validación, creación de modelos, facturación, y envío de correos.
+    """
+    # Define los formularios para GET y POST para evitar duplicación
+    cert_form = CertificadoTransporteForm(request.POST or None, user=request.user)
+    ruta_form = RutaForm(request.POST or None)
+    metodo_form = MetodoEmbarqueForm(request.POST or None)
+    merc_form = TipoMercanciaForm(request.POST or None)
+    viaje_form = ViajeForm(request.POST or None)
+    notas_form = NotasNumerosForm(request.POST or None)
+    
+    # Prepara el contexto común para ambos casos (GET y POST)
+    context = {
+        'cert_form': cert_form,
+        'ruta_form': ruta_form,
+        'metodo_form': metodo_form,
+        'mercancia_form': merc_form,
+        'viaje_form': viaje_form,
+        'notas_form': notas_form,
+        'certificados': _build_certificados_queryset(request),
+        'filtros': {'inicio': '', 'fin': '', 'q': ''},
+        'open_modal': False,
+    }
 
     # --- POST: CREACIÓN ---
     if request.method == 'POST':
-        cert_form   = CertificadoTransporteForm(request.POST, user=request.user)
-        ruta_form   = RutaForm(request.POST)
-        metodo_form = MetodoEmbarqueForm(request.POST)
-        merc_form   = TipoMercanciaForm(request.POST)
-        viaje_form  = ViajeForm(request.POST)
-        notas_form  = NotasNumerosForm(request.POST)
-
         forms_to_validate = {
             'cert_form': cert_form,
             'ruta_form': ruta_form,
@@ -361,239 +376,222 @@ def crear_certificado(request):
             'notas_form': notas_form,
         }
 
-        # Si TODO es válido -> creamos
+        # Si TODOS los formularios son válidos
         if all(f.is_valid() for f in forms_to_validate.values()):
             try:
+                # Comienza la transacción atómica
                 with transaction.atomic():
-                    # 1) RELACIONADOS
-                    ruta      = ruta_form.save()
-                    metodo    = metodo_form.save()
+                    # 1) GUARDA LOS MODELOS RELACIONADOS
+                    ruta = ruta_form.save()
+                    metodo = metodo_form.save()
                     mercancia = merc_form.save()
-
                     viaje = viaje_form.save(commit=False)
 
-                    # Si es Terrestre/Ferroviario, garantizamos aeropuertos nulos (evita NOT NULL)
-                    if modo_post == 'TerrestreFerroviario':
-                        if hasattr(viaje, 'aeropuerto_origen'):
-                            viaje.aeropuerto_origen = None
-                        if hasattr(viaje, 'aeropuerto_destino'):
-                            viaje.aeropuerto_destino = None
+                    # Si es Terrestre/Ferroviario, garantizamos aeropuertos nulos
+                    if request.POST.get('modo_transporte') == 'TerrestreFerroviario':
+                        viaje.aeropuerto_origen = None
+                        viaje.aeropuerto_destino = None
 
                     # Normalización robusta de países (si usas sigla -> nombre)
-                    try:
-                        if viaje.vuelo_origen_pais:
-                            p = Pais.objects.filter(sigla__iexact=str(viaje.vuelo_origen_pais).strip()).first()
-                            if p:
-                                viaje.vuelo_origen_pais = p.nombre
-                                viaje.vuelo_origen_pais_fk = p
-                        if viaje.vuelo_destino_pais:
-                            p = Pais.objects.filter(sigla__iexact=str(viaje.vuelo_destino_pais).strip()).first()
-                            if p:
-                                viaje.vuelo_destino_pais = p.nombre
-                                viaje.vuelo_destino_pais_fk = p
-                    except Exception:
-                        logger.warning("Normalización de países falló", exc_info=True)
-
+                    _normalize_paises(viaje)
                     viaje.save()
                     notas = notas_form.save()
 
-                    # 2) CERTIFICADO
+                    # 2) GUARDA EL CERTIFICADO PRINCIPAL
                     certificado = cert_form.save(commit=False)
-
-                    # Fallback de cliente: del usuario si el form no lo trae
-                    if not getattr(certificado, 'cliente', None) and getattr(request.user, 'cliente', None):
-                        certificado.cliente = request.user.cliente
-                    if not getattr(certificado, 'cliente', None):
-                        raise ValueError("No hay cliente asociado al certificado (ni por el form ni por el usuario).")
-
                     certificado.ruta = ruta
                     certificado.metodo_embarque = metodo
                     certificado.tipo_mercancia = mercancia
                     certificado.viaje = viaje
                     certificado.notas = notas
                     certificado.creado_por = request.user
+                    
+                    # Fallback del cliente
+                    if not getattr(certificado, 'cliente', None) and getattr(request.user, 'cliente', None):
+                        certificado.cliente = request.user.cliente
+                    
+                    if not getattr(certificado, 'cliente', None):
+                        raise ValueError("No hay cliente asociado al certificado.")
 
-                    # Valor prima estimado (fallback)
-                    valor_prima = getattr(mercancia, 'valor_prima', None)
-                    certificado.valor_prima_estimado = (valor_prima if valor_prima is not None else Decimal('0'))
+                    # Valor prima estimado
+                    valor_prima = getattr(mercancia, 'valor_prima', Decimal('0'))
+                    certificado.valor_prima_estimado = valor_prima
                     certificado.save()
 
-                    # 2.5) Cobranza sincronizada
+                    # 3) SINCRONIZA COBRANZA
                     Cobranza.objects.update_or_create(
                         certificado=certificado,
                         defaults={
                             'fecha_cobro': date.today(),
-                            'valor_fca': getattr(mercancia, 'valor_fca', None) or Decimal('0'),
-                            'valor_flete': getattr(mercancia, 'valor_flete', None) or Decimal('0'),
-                            'monto_asegurado': getattr(mercancia, 'monto_asegurado', None) or Decimal('0'),
-                            'valor_prima_estimado': certificado.valor_prima_estimado or Decimal('0'),
-                            'valor_prima_cobro': getattr(certificado, 'valor_prima_cobro', None) or Decimal('0'),
+                            'valor_fca': getattr(mercancia, 'valor_fca', Decimal('0')),
+                            'valor_flete': getattr(mercancia, 'valor_flete', Decimal('0')),
+                            'monto_asegurado': getattr(mercancia, 'monto_asegurado', Decimal('0')),
+                            'valor_prima_estimado': certificado.valor_prima_estimado,
+                            'valor_prima_cobro': getattr(certificado, 'valor_prima_cobro', Decimal('0')),
                             'estado': 'pendiente',
                         }
                     )
 
+                    # Registra la actividad después de la creación exitosa
                     registrar_actividad(request.user, f"Creó certificado: C-{certificado.id}")
 
-                    # 3) PDF del certificado
-                    certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
-
-                    # 4) FACTURACIÓN (condicional)
+                    # 4) PROCESO DE FACTURACIÓN (CONDICIONAL)
                     factura_creada = None
                     response_facturacion = {'success': False}
-
-                    facturar_automaticamente = bool(
-                        getattr(request.user, 'emitir_factura_automatica', False) or
-                        getattr(certificado.cliente, 'emitir_factura_automatica', False)
-                    )
+                    facturar_automaticamente = getattr(request.user, 'emitir_factura_automatica', False) or getattr(certificado.cliente, 'emitir_factura_automatica', False)
 
                     if facturar_automaticamente:
-                        max_num = Factura.objects.aggregate(max_num=Max('numero')).get('max_num') or 0
-                        numero_sugerido = max_num + 1
-                        valor_usd = valor_prima or Decimal('0')
+                        # Obtenemos el tipo de cambio antes de la transacción si es posible
+                        # (aqui se mantiene por dependencia, pero idealmente se obtiene antes)
+                        dolar = _get_dolar_observado()
 
-                        factura_creada, _ = Factura.objects.get_or_create(
-                            certificado=certificado,
-                            defaults={
-                                'numero': numero_sugerido,
-                                'razon_social': certificado.cliente.nombre,
-                                'rut': certificado.cliente.rut,
-                                'direccion': certificado.cliente.direccion,
-                                'comuna': getattr(certificado.cliente, 'region', None) or 'Por definir',
-                                'ciudad': getattr(certificado.cliente, 'ciudad', None) or '',
-                                'valor_usd': valor_usd,
-                                'fecha_emision': getattr(certificado, 'fecha_partida', None) or date.today(),
-                                'estado_emision': 'pendiente',
-                            }
-                        )
-                        factura_creada.valor_usd = valor_usd
-
-                        # Tipo de cambio (fallback 950 si no hay servicio)
                         try:
-                            r = obtener_dolar_observado(getattr(settings, 'BCCH_USER', None),
-                                                        getattr(settings, 'BCCH_PASS', None)) or {}
-                            valor_tc = r.get("valor")
-                            dolar = Decimal(str(valor_tc)) if valor_tc is not None else Decimal('950.00')
-                        except Exception:
-                            logger.warning("No se pudo obtener dólar observado, se usa 950.00", exc_info=True)
-                            dolar = Decimal('950.00')
+                            # Se busca la última factura creada y se genera el nuevo número.
+                            max_num = Factura.objects.aggregate(max_num=Max('numero')).get('max_num') or 0
+                            numero_sugerido = max_num + 1
 
-                        factura_creada.tipo_cambio = dolar
-                        factura_creada.valor_clp = (factura_creada.valor_usd or Decimal('0')) * dolar
-                        factura_creada.save()
+                            factura_creada, _ = Factura.objects.get_or_create(
+                                certificado=certificado,
+                                defaults={
+                                    'numero': numero_sugerido,
+                                    'razon_social': certificado.cliente.nombre,
+                                    'rut': certificado.cliente.rut,
+                                    'direccion': certificado.cliente.direccion,
+                                    'comuna': getattr(certificado.cliente, 'region', 'Por definir'),
+                                    'ciudad': getattr(certificado.cliente, 'ciudad', ''),
+                                    'valor_usd': valor_prima,
+                                    'fecha_emision': getattr(certificado, 'fecha_partida', date.today()),
+                                    'estado_emision': 'pendiente',
+                                    'tipo_cambio': dolar,
+                                    'valor_clp': valor_prima * dolar,
+                                }
+                            )
 
-                        # Emisión DTE
-                        try:
+                            # Emisión DTE
                             response_facturacion = emitir_factura_exenta_cl_xml(factura_creada) or {}
+                            if response_facturacion.get('success'):
+                                factura_creada.folio_sii = response_facturacion.get('folio_sii')
+                                factura_creada.url_pdf_sii = response_facturacion.get('url_pdf_sii')
+                                factura_creada.estado_emision = 'exito'
+                                messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
+                            else:
+                                error_detalle = response_facturacion.get('error', 'Error desconocido al emitir en facturacion.cl')
+                                factura_creada.estado_emision = 'fallida'
+                                factura_creada.observaciones = f"Error al emitir DTE: {error_detalle}"
+                                messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
+                            
+                            factura_creada.save()
+
                         except Exception as e:
-                            logger.error(f"Fallo al emitir DTE: {e}", exc_info=True)
-                            response_facturacion = {'success': False, 'error': str(e)}
+                            logger.error(f"Fallo en la facturación automática: {e}", exc_info=True)
+                            messages.error(request, f"Certificado creado, pero fallo crítico en la facturación automática: {e}")
+                    
+                # 5) PROCESOS POST-TRANSACCIÓN (idealmente en un worker asíncrono)
+                certificado_pdf_buffer = generar_pdf_certificado(certificado, request)
+                factura_pdf_buffer = None
+                
+                otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '') or ''
+                emails_manuales = [e.strip() for e in otros_emails_manuales_str.split(',') if e.strip()]
+                emails_guardados = request.user.get_lista_emails_adicionales() if hasattr(request.user, 'get_lista_emails_adicionales') else []
+                destinatarios_extra = list(set(emails_manuales + emails_guardados))
 
-                        if response_facturacion.get('success'):
-                            factura_creada.folio_sii = response_facturacion.get('folio_sii')
-                            factura_creada.url_pdf_sii = response_facturacion.get('url_pdf_sii')
-                            factura_creada.estado_emision = 'exito'
-                            factura_creada.save()
-                            messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
-                        else:
-                            error_detalle = response_facturacion.get('error', 'Error desconocido al emitir en facturacion.cl')
-                            factura_creada.estado_emision = 'fallida'
-                            factura_creada.observaciones = f"Error al emitir DTE: {error_detalle}"
-                            factura_creada.save()
-                            messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
-
-                    # 5) ENVÍO DE CORREOS
+                if factura_creada and factura_creada.estado_emision == 'exito':
                     try:
-                        otros_emails_manuales_str = cert_form.cleaned_data.get('otros_emails_copia', '') or ''
-                        emails_manuales = [e.strip() for e in otros_emails_manuales_str.split(',') if e.strip()]
-                        try:
-                            emails_guardados = request.user.get_lista_emails_adicionales()
-                        except Exception:
-                            emails_guardados = []
-                        destinatarios_extra = list(set(emails_manuales + emails_guardados))
-
-                        if factura_creada and factura_creada.estado_emision == 'exito':
-                            factura_pdf_buffer = generar_pdf_factura(factura_creada, request)
-                            enviar_certificado_y_factura(
-                                certificado=certificado,
-                                pdf_cert=certificado_pdf_buffer,
-                                factura_obj=factura_creada,
-                                pdf_fact=factura_pdf_buffer,
-                                destinatarios_extra=destinatarios_extra
-                            )
-                        else:
-                            if facturar_automaticamente:
-                                messages.info(request, "El certificado se envió por correo sin adjuntar la factura.")
-                            enviar_solo_certificado(
-                                certificado=certificado,
-                                pdf_cert=certificado_pdf_buffer,
-                                destinatarios_extra=destinatarios_extra
-                            )
-                        logger.info("Correos de notificación enviados.")
-                    except Exception:
-                        logger.error("Error en el envío de correo de notificación", exc_info=True)
+                        factura_pdf_buffer = generar_pdf_factura(factura_creada, request)
+                        enviar_certificado_y_factura(
+                            certificado=certificado, pdf_cert=certificado_pdf_buffer,
+                            factura_obj=factura_creada, pdf_fact=factura_pdf_buffer,
+                            destinatarios_extra=destinatarios_extra
+                        )
+                        logger.info("Correos de notificación (certificado + factura) enviados.")
+                    except Exception as e:
+                        logger.error(f"Error al enviar correo (certificado + factura): {e}", exc_info=True)
                         messages.warning(request, "El certificado se creó, pero hubo un problema al enviar la notificación por correo.")
-
-                    # Respuesta AJAX
-                    if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                        return JsonResponse({
-                            'success': True,
-                            'factura_emitida': bool(facturar_automaticamente and factura_creada and factura_creada.estado_emision == 'exito'),
-                            'resultado': response_facturacion if facturar_automaticamente else {'success': True}
-                        })
-
-                    return redirect('crear_certificado')
-
-            except Exception as e:
-                logger.error(f"Error en la transacción de creación de certificado/factura: {e}", exc_info=True)
+                else:
+                    try:
+                        enviar_solo_certificado(
+                            certificado=certificado, pdf_cert=certificado_pdf_buffer,
+                            destinatarios_extra=destinatarios_extra
+                        )
+                        if facturar_automaticamente:
+                            messages.info(request, "El certificado se envió por correo sin adjuntar la factura.")
+                        logger.info("Correo de notificación (solo certificado) enviado.")
+                    except Exception as e:
+                        logger.error(f"Error al enviar correo (solo certificado): {e}", exc_info=True)
+                        messages.warning(request, "El certificado se creó, pero hubo un problema al enviar la notificación por correo.")
+                
+                # Respuesta para AJAX o redirección
                 if request.headers.get('x-requested-with') == 'XMLHttpRequest':
-                    return JsonResponse({'success': False, 'errors': {'__all__': [str(e)]}}, status=400)
+                    return JsonResponse({
+                        'success': True,
+                        'factura_emitida': bool(facturar_automaticamente and factura_creada and factura_creada.estado_emision == 'exito'),
+                        'resultado': response_facturacion if facturar_automaticamente else {'success': True}
+                    })
+
+                return redirect('crear_certificado')
+
+            except IntegrityError as e:
+                logger.error(f"Error de integridad en la transacción: {e}", exc_info=True)
+                messages.error(request, "Error de datos duplicados. No se pudo crear el certificado.")
+                context.update({'open_modal': True})
+                return render(request, 'certificados/crear_certificado.html', context)
+            except ValueError as e:
+                logger.error(f"Error en el valor de los datos: {e}", exc_info=True)
+                messages.error(request, f"Error en los datos de entrada: {e}")
+                context.update({'open_modal': True})
+                return render(request, 'certificados/crear_certificado.html', context)
+            except Exception as e:
+                logger.error(f"Error inesperado en la transacción de creación: {e}", exc_info=True)
                 messages.error(request, f"Error al generar el certificado o la factura: {e}")
-                context = {
-                    'cert_form': cert_form,
-                    'ruta_form': ruta_form,
-                    'metodo_form': metodo_form,
-                    'mercancia_form': merc_form,
-                    'viaje_form': viaje_form,
-                    'notas_form': notas_form,
-                    'certificados': _build_certificados_queryset(request),
-                    'filtros': {'inicio': '', 'fin': '', 'q': ''},
-                    'open_modal': True,
-                }
+                context.update({'open_modal': True})
                 return render(request, 'certificados/crear_certificado.html', context)
 
-        # --- POST INVÁLIDO: re-render con errores visibles ---
+        # Si el formulario es inválido, actualiza el contexto y re-renderiza
         errors = {name: form.errors for name, form in forms_to_validate.items() if not form.is_valid()}
         logger.error(f"Errores de validación de formulario: {errors}")
         if request.headers.get('x-requested-with') == 'XMLHttpRequest':
             return JsonResponse({'success': False, 'errors': errors}, status=400)
 
-        messages.error(request, "Hay errores en el formulario. Revisa los campos resaltados en el modal.")
-        context = {
-            'cert_form': cert_form,
-            'ruta_form': ruta_form,
-            'metodo_form': metodo_form,
-            'mercancia_form': merc_form,
-            'viaje_form': viaje_form,
-            'notas_form': notas_form,
-            'certificados': _build_certificados_queryset(request),
-            'filtros': {'inicio': '', 'fin': '', 'q': ''},
-            'open_modal': True,
-        }
+        messages.error(request, "Hay errores en el formulario. Revisa los campos resaltados.")
+        context.update({'open_modal': True})
         return render(request, 'certificados/crear_certificado.html', context)
 
     # --- GET: LISTADO / FORMULARIO ---
     certificados, filtros = _build_certificados_queryset(request, return_filters=True)
-    context = {
-        'cert_form': CertificadoTransporteForm(user=request.user),
-        'ruta_form': RutaForm(),
-        'metodo_form': MetodoEmbarqueForm(),
-        'mercancia_form': TipoMercanciaForm(),
-        'viaje_form': ViajeForm(),
-        'notas_form': NotasNumerosForm(),
+    context.update({
         'certificados': certificados,
         'filtros': filtros,
-    }
+        'open_modal': False,
+    })
     return render(request, 'certificados/crear_certificado.html', context)
+
+# --- Funciones auxiliares (fuera de la vista) ---
+
+def _normalize_paises(viaje):
+    """Normaliza los códigos de país a nombres."""
+    try:
+        if viaje.vuelo_origen_pais:
+            p = Pais.objects.filter(sigla__iexact=viaje.vuelo_origen_pais.strip()).first()
+            if p:
+                viaje.vuelo_origen_pais = p.nombre
+                viaje.vuelo_origen_pais_fk = p
+        if viaje.vuelo_destino_pais:
+            p = Pais.objects.filter(sigla__iexact=viaje.vuelo_destino_pais.strip()).first()
+            if p:
+                viaje.vuelo_destino_pais = p.nombre
+                viaje.vuelo_destino_pais_fk = p
+    except Exception:
+        logger.warning("Normalización de países falló", exc_info=True)
+
+def _get_dolar_observado():
+    """Obtiene el valor del dólar observado con fallback."""
+    try:
+        r = obtener_dolar_observado(getattr(settings, 'BCCH_USER', None), getattr(settings, 'BCCH_PASS', None)) or {}
+        valor_tc = r.get("valor")
+        return Decimal(str(valor_tc)) if valor_tc is not None else Decimal('950.00')
+    except Exception:
+        logger.warning("No se pudo obtener dólar observado, se usa 950.00", exc_info=True)
+        return Decimal('950.00')
 
 
 def _build_certificados_queryset(request, return_filters=False):
