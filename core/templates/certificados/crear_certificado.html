@@ -54,7 +54,7 @@
         {% if user.is_superuser %}
         <th>Creado por</th>
         {% endif %}
-        <th>Fecha</th>
+        <th>Fecha Emisión</th>
         <th>PDF Certificado</th>
         <th>PDF Factura</th>
       </tr>
@@ -84,8 +84,8 @@
         </td>
         {% endif %}
         <td>
-          {% if cert.fecha_creacion %}
-            {{ cert.fecha_creacion|date:"d/m/Y" }}
+          {% if cert.fecha_emision %}
+            {{ cert.fecha_emision|date:"d/m/Y" }}
           {% else %}
             -
           {% endif %}
@@ -214,6 +214,13 @@
 {% block extra_js %}
 <script>
 document.addEventListener("DOMContentLoaded", function () {
+  // Establecer fecha de emisión por defecto como fecha actual
+  const fechaEmisionInput = document.getElementById("id_fecha_emision");
+  if (fechaEmisionInput && !fechaEmisionInput.value) {
+    const today = new Date().toISOString().split('T')[0];
+    fechaEmisionInput.value = today;
+  }
+
   const embalajeSelect = document.getElementById("id_embalaje");
   const tipoContainerSelect = document.getElementById("id_tipo_container");
   const modoTransporteSelect = document.getElementById("id_modo_transporte");

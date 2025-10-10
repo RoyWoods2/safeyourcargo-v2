@@ -144,11 +144,12 @@ class CertificadoTransporteForm(forms.ModelForm):
 
     class Meta:
         model = CertificadoTransporte
-        fields = ['cliente', 'fecha_partida', 'fecha_llegada', 'otros_emails_copia']
+        fields = ['cliente', 'fecha_partida', 'fecha_llegada', 'fecha_emision', 'otros_emails_copia']
         widgets = {
             'cliente': ClienteSelectWidget(attrs={'class': 'form-select', 'id': 'id_cliente'}),
             'fecha_partida': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
             'fecha_llegada': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
+            'fecha_emision': forms.DateInput(attrs={'type': 'date', 'class': 'form-control'}),
         }
 
     def __init__(self, *args, **kwargs):

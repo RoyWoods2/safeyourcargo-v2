@@ -460,7 +460,7 @@ def crear_certificado(request):
                                     'comuna': getattr(certificado.cliente, 'region', 'Por definir'),
                                     'ciudad': getattr(certificado.cliente, 'ciudad', ''),
                                     'valor_usd': valor_prima,
-                                    'fecha_emision': getattr(certificado, 'fecha_partida', date.today()),
+                                    'fecha_emision': getattr(certificado, 'fecha_emision', date.today()),
                                     'estado_emision': 'pendiente',
                                     'tipo_cambio': dolar,
                                     'valor_clp': valor_prima * dolar,
@@ -470,17 +470,22 @@ def crear_certificado(request):
                             # Emisión DTE
                             response_facturacion = emitir_factura_exenta_cl_xml(factura_creada) or {}
                             if response_facturacion.get('success'):
-                                factura_creada.folio_sii = response_facturacion.get('folio_sii')
-                                factura_creada.url_pdf_sii = response_facturacion.get('url_pdf_sii')
-                                factura_creada.estado_emision = 'exito'
+                                # Los datos ya se guardaron en facturacion_cl.py, solo actualizamos si es necesario
+                                if not factura_creada.folio_sii:
+                                    factura_creada.folio_sii = response_facturacion.get('folio_sii')
+                                if not factura_creada.url_pdf_sii:
+                                    factura_creada.url_pdf_sii = response_facturacion.get('url_pdf_sii')
+                                if factura_creada.estado_emision != 'exito':
+                                    factura_creada.estado_emision = 'exito'
+                                    factura_creada.save()
                                 messages.success(request, "Certificado y factura emitida correctamente con timbre SII.")
                             else:
                                 error_detalle = response_facturacion.get('error', 'Error desconocido al emitir en facturacion.cl')
-                                factura_creada.estado_emision = 'fallida'
-                                factura_creada.observaciones = f"Error al emitir DTE: {error_detalle}"
+                                if factura_creada.estado_emision != 'fallida':
+                                    factura_creada.estado_emision = 'fallida'
+                                    factura_creada.observaciones = f"Error al emitir DTE: {error_detalle}"
+                                    factura_creada.save()
                                 messages.error(request, f"Certificado creado, pero error al emitir factura electrónica: {error_detalle}")
-                            
-                            factura_creada.save()
 
                         except Exception as e:
                             logger.error(f"Fallo en la facturación automática: {e}", exc_info=True)

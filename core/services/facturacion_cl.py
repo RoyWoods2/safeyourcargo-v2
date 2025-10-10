@@ -54,10 +54,30 @@ def generar_txt_factura_exenta(factura: Factura) -> str:
     # ✅ TOTALES
     totales = f"0;0;0;0;0;{valor};0;0;{valor};0;0;"
 
-    # ✅ DETALLE
-    descripcion = f"Despacho {certificado.ruta.ciudad_destino or 'Destino'} - C-{certificado.id}"
+    # ✅ DETALLE (formato corto)
+    descripcion_base = f"Despacho {certificado.ruta.ciudad_destino or 'Destino'} - C-{certificado.id}"
+    detalles = []
+    
+    # Agregar valor de la prima (usar el mismo valor que se muestra en el certificado PDF)
+    prima_usd = certificado.tipo_mercancia.valor_prima
+    detalles.append(f"prima ${prima_usd}")
+    
+    # Debug: verificar valores de prima
+    print(f"DEBUG: Prima del certificado (tipo_mercancia.valor_prima): {certificado.tipo_mercancia.valor_prima}")
+    print(f"DEBUG: Prima estimada del certificado: {certificado.valor_prima_estimado}")
+    print(f"DEBUG: Prima usada en factura: {prima_usd}")
+    
+    # Agregar referencia si existe
+    if certificado.notas and certificado.notas.referencia:
+        referencia = certificado.notas.referencia.strip()
+        if referencia:
+            detalles.append(f"ref: {referencia}")
+    
+    # Construir descripción completa con formato corto
+    descripcion_completa = f"{descripcion_base} - {' - '.join(detalles)}"
+    
     desc_larga = f"Seguro de carga internacional - PRIMA USD ${factura.valor_usd}"
-    detalle = f"1;SEG001;Seguro de Carga;1;{valor};0;0;0;0;{valor};0;INT1;UN;{desc_larga};"
+    detalle = f"1;SEG001;Seguro de Carga;1;{valor};0;0;0;0;{valor};0;INT1;UN;{descripcion_completa};"
 
     # ✅ FORMATO FINAL
     lineas = [
@@ -156,12 +176,16 @@ def emitir_factura_exenta_cl_xml(factura: Factura) -> dict:
 
 
         # Guardar estado, folio y URL en la factura
-        factura.estado_emision = estado
-        if folio_sii_obtenido:
-            factura.folio_sii = folio_sii_obtenido
-        if url_pdf_sii_obtenida:
-            factura.url_pdf_sii = url_pdf_sii_obtenida
-        factura.save() # Guarda los cambios en la instancia de la factura
+        try:
+            factura.estado_emision = estado
+            if folio_sii_obtenido:
+                factura.folio_sii = folio_sii_obtenido
+            if url_pdf_sii_obtenida:
+                factura.url_pdf_sii = url_pdf_sii_obtenida
+            factura.save() # Guarda los cambios en la instancia de la factura
+        except Exception as save_error:
+            print(f"⚠️ Error al guardar factura (folio duplicado o similar): {save_error}")
+            # No re-lanzamos la excepción para evitar romper la transacción principal
 
         return {
             'success': estado == "exito", # Solo es éxito si el estado final es 'exito'
@@ -173,8 +197,12 @@ def emitir_factura_exenta_cl_xml(factura: Factura) -> dict:
 
     except Exception as e:
         # Captura cualquier excepción que ocurra durante el proceso (conexión, parsing, etc.)
-        factura.estado_emision = "fallida_exception"
-        factura.save() # Guarda el estado de falla
+        try:
+            factura.estado_emision = "fallida_exception"
+            factura.save() # Guarda el estado de falla
+        except Exception as save_error:
+            print(f"⚠️ Error al guardar estado de falla: {save_error}")
+        
         print(f"❌ Error crítico en emitir_factura_exenta_cl_xml: {e}")
         return {'success': False, 'error': str(e), 'estado_emision': 'fallida_exception'}
 
@@ -282,7 +310,37 @@ def generar_xml_factura_exenta(factura: Factura) -> str:
     etree.SubElement(cdgitem, "TpoCodigo").text = "INT1"
     etree.SubElement(cdgitem, "VlrCodigo").text = "SEG001"
     etree.SubElement(detalle, "IndExe").text = "1"
-    etree.SubElement(detalle, "NmbItem").text = "Seguro de Carga"
+    
+    # Descripción del servicio con información específica del certificado (formato corto)
+    descripcion_base = "Seguro de carga"
+    detalles = []
+    
+    # Agregar número de certificado
+    detalles.append(f"cert. C-{certificado.id}")
+    
+    # Agregar valor de la prima (usar el mismo valor que se muestra en el certificado PDF)
+    prima_usd = certificado.tipo_mercancia.valor_prima
+    detalles.append(f"prima ${prima_usd}")
+    
+    # Debug: verificar valores de prima
+    print(f"DEBUG: Prima del certificado (tipo_mercancia.valor_prima): {certificado.tipo_mercancia.valor_prima}")
+    print(f"DEBUG: Prima estimada del certificado: {certificado.valor_prima_estimado}")
+    print(f"DEBUG: Prima usada en factura: {prima_usd}")
+    
+    # Agregar referencia si existe
+    if certificado.notas and certificado.notas.referencia:
+        referencia = certificado.notas.referencia.strip()
+        if referencia:
+            detalles.append(f"ref: {referencia}")
+    
+    # Construir descripción completa con formato corto
+    descripcion_completa = f"{descripcion_base} - {' - '.join(detalles)}"
+    
+    # Debug: imprimir la descripción para verificar
+    print(f"DEBUG: Descripción completa de la factura: {descripcion_completa}")
+    print(f"DEBUG: Longitud de la descripción: {len(descripcion_completa)}")
+    
+    etree.SubElement(detalle, "NmbItem").text = descripcion_completa
     etree.SubElement(detalle, "QtyItem").text = "1"
     etree.SubElement(detalle, "UnmdItem").text = "UN"
     etree.SubElement(detalle, "PrcItem").text = str(monto)

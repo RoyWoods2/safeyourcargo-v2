@@ -93,13 +93,13 @@
         <br>
         Certificado Nº: C-{{ certificado.id }}<br>
         Póliza Nº: 01930324AA<br>
-        Emitido: {{ certificado.fecha_partida|date:"Y-m-d" }}
+        Emitido: {{ certificado.fecha_emision|date:"Y-m-d" }}
       </p>
     </div>
   </div>
 
   <p style="margin: 8px 0;">
-    Por el presente certificado, constatamos que <strong>{{ certificado.cliente.nombre }}</strong> posee cobertura de transporte con vigencia desde {{ certificado.fecha_partida|date:"Y-m-d" }} para el siguiente viaje:
+    Por el presente certificado, constatamos que <strong>{{ certificado.cliente.nombre }}</strong> posee cobertura de transporte con vigencia desde {{ certificado.fecha_emision|date:"Y-m-d" }} para el siguiente viaje:
   </p>
 
   <div class="section-title">Datos de Cliente</div>

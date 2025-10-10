@@ -133,6 +133,10 @@ class CertificadoTransporte(models.Model):
         auto_now_add=True,
         verbose_name='Fecha de creación'
     )
+    fecha_emision = models.DateField(
+        default=date.today,
+        verbose_name='Fecha de emisión'
+    )
     fecha_modificacion = models.DateTimeField(
         auto_now=True,
         verbose_name='Última modificación'
