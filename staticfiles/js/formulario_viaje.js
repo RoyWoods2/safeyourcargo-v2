@@ -39,7 +39,7 @@ document.addEventListener("DOMContentLoaded", function () {
   const embalajeMaritimo = document.getElementById("id_embalaje_maritimo");
   const grupoContMar = document.getElementById("grupo_tipo_container_maritimo");
   const selContMar = document.getElementById("id_tipo_container_maritimo");
-  const grupoEmbalajeLCLMaritimo = document.getElementById("grupo_tipo_embalaje_lcl_maritimo");
+  const grupoEmbalajeLCL = document.getElementById("grupo_tipo_embalaje_lcl");
   const embalajeLCL = document.getElementById("id_tipo_embalaje_lcl");
   const grupoOtroLCL = document.getElementById("grupo_otro_embalaje_lcl");
 
@@ -48,7 +48,6 @@ document.addEventListener("DOMContentLoaded", function () {
   const tipoEmbalajeTerrestre = document.getElementById("id_tipo_embalaje_terrestre");
   const grupoContTer = document.getElementById("grupo_tipo_container_terrestre");
   const selContTer = document.getElementById("id_tipo_container_maritimo");
-  const grupoEmbalajeLCLTerrestre = document.getElementById("grupo_embalaje_lcl_terrestre");
   const grupoOtroTerrestre = document.getElementById("grupo_otro_embalaje_terrestre");
 
   // =========================================
@@ -226,8 +225,8 @@ document.addEventListener("DOMContentLoaded", function () {
   // =========================================
   function hideAllPacking() {
     [grupoAereo, grupoOtroAereo,
-      grupoMaritimo, grupoContMar, grupoEmbalajeLCLMaritimo, grupoOtroLCL,
-      grupoTerrestre, grupoOtroTerrestre, grupoContTer, grupoEmbalajeLCLTerrestre
+      grupoMaritimo, grupoContMar, grupoEmbalajeLCL, grupoOtroLCL,
+      grupoTerrestre, grupoOtroTerrestre, grupoContTer
     ].forEach(hide);
   }
 
@@ -245,8 +244,8 @@ function actualizarVistaEmbalaje() {
 
   // Oculta todo
   [grupoAereo, grupoOtroAereo,
-   grupoMaritimo, grupoContMar, grupoEmbalajeLCLMaritimo, grupoOtroLCL,
-   grupoTerrestre, grupoContTer, grupoEmbalajeLCLTerrestre, grupoOtroTerrestre
+   grupoMaritimo, grupoContMar, grupoEmbalajeLCL, grupoOtroLCL,
+   grupoTerrestre, grupoContTer, grupoOtroTerrestre
   ].forEach(hide);
 
   if (!labelTransporte) return;
@@ -267,7 +266,7 @@ function actualizarVistaEmbalaje() {
       // Requiere contenedor
       if (selContMar) selContMar.required = true;
       show(grupoContMar);
-      hide(grupoEmbalajeLCLMaritimo);
+      hide(grupoEmbalajeLCL);
       hide(grupoOtroLCL);
       // Limpia posibles residuos LCL
       if (embalajeLCL) { embalajeLCL.value = ''; }
@@ -277,13 +276,15 @@ function actualizarVistaEmbalaje() {
       // No requiere contenedor
       if (selContMar) selContMar.required = false;
       clearSelect(selContMar);
-      show(grupoEmbalajeLCLMaritimo);
+      hide(grupoContMar);
+      show(grupoEmbalajeLCL);
       if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
     } else {
       // Nada seleccionado aún: limpia y oculta
       if (selContMar) selContMar.required = false;
       clearSelect(selContMar);
-      hide(grupoEmbalajeLCLMaritimo);
+      hide(grupoContMar);
+      hide(grupoEmbalajeLCL);
       hide(grupoOtroLCL);
     }
     return;
@@ -297,7 +298,7 @@ function actualizarVistaEmbalaje() {
     if (val === "FLC") {
       if (selContTer) selContTer.required = true;  // reutiliza el mismo select del contenedor
       show(grupoContTer);
-      hide(grupoEmbalajeLCLTerrestre);
+      hide(grupoEmbalajeLCL);
       hide(grupoOtroTerrestre);
       // Limpia posibles residuos LCL
       if (embalajeLCL) embalajeLCL.value = '';
@@ -306,18 +307,19 @@ function actualizarVistaEmbalaje() {
     } else if (val === "LCL") {
       if (selContTer) selContTer.required = false;
       clearSelect(selContTer);
-      show(grupoEmbalajeLCLTerrestre);
+      hide(grupoContTer);
+      show(grupoEmbalajeLCL);
       hide(grupoOtroTerrestre);
       if (embalajeLCL && embalajeLCL.value === "OTRO") show(grupoOtroLCL);
     } else if (val === "OTRO") {
       if (selContTer) selContTer.required = false;
       clearSelect(selContTer);
-      hide(grupoEmbalajeLCLTerrestre);
+      hide(grupoEmbalajeLCL);
       show(grupoOtroTerrestre);
     } else {
       if (selContTer) selContTer.required = false;
       clearSelect(selContTer);
-      hide(grupoEmbalajeLCLTerrestre);
+      hide(grupoEmbalajeLCL);
       hide(grupoOtroTerrestre);
     }
     return;
